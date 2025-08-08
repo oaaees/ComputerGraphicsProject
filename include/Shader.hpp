@@ -34,6 +34,8 @@ public:
 
     GLuint get_uniform_model_id() const noexcept { return uniform_model_id; }
 
+    GLuint get_program_id() const noexcept { return program_id; }
+
     void use() const noexcept;
 
 private:

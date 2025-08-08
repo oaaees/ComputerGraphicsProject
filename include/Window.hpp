@@ -42,6 +42,8 @@ public:
 
     void swap_buffers() noexcept;
 
+    GLFWwindow* get_window() const noexcept { return window; }
+
 private:
     GLFWwindow* window{nullptr};
     GLint width{0};

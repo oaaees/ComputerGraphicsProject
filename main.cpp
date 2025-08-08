@@ -14,6 +14,8 @@
 #include <Texture.hpp>
 #include <Window.hpp>
 
+#include <Tangram.hpp>
+
 namespace fs = std::filesystem;
 
 struct Data
@@ -37,25 +39,6 @@ float to_radian(float degrees)
     return degrees * M_PI / 180.f;
 }
 
-void specify_vertices() noexcept
-{
-    std::vector<unsigned int> indices{
-        0, 3, 1,
-        1, 3, 2,
-        2, 3, 0,
-        0, 1, 2
-    };
-
-    std::vector<GLfloat> vertices{
-    //    x     y    z    u    v
-        -1.f, -1.f, 0.f, 0.f,  0.f,
-        0.f, -1., 1.f,   0.5f, 0.f,
-        1.f, -1.f, 0.f,  1.f,  0.f,
-        0.f, 1.f, 0.f,   0.5f, 1.f
-    };
-
-    Data::mesh_list.push_back(Mesh::create(vertices, indices));
-}
 void create_shaders_program() noexcept
 {
     Data::shader_list.push_back(Shader::create_from_files(Data::vertex_shader_path, Data::fragment_shader_path));
@@ -67,14 +50,13 @@ int main()
     constexpr GLint WIDTH = 800;
     constexpr GLint HEIGHT = 600;
 
-    auto main_window = Window::create(WIDTH, HEIGHT, "Textures");
+    auto main_window = Window::create(WIDTH, HEIGHT, "Tangram Puzzle");
 
     if (main_window == nullptr)
     {
         return EXIT_FAILURE;
     }
 
-    specify_vertices();
     create_shaders_program();
 
     Camera camera{glm::vec3{0.f, 0.f, -5.f}, glm::vec3{0.f, 1.f, 0.f}, 0.f, 90.f, 2.f, 20.f};
@@ -82,7 +64,7 @@ int main()
     Texture brick_texture{Data::root_path / "textures" / "brick.png"};
     brick_texture.load();
 
-    float current_angle{0.f};
+    Tangram tangram;
 
     glm::mat4 projection = glm::perspective(45.f, main_window->get_aspect_ratio(), 0.1f, 100.f);
 
@@ -98,15 +80,8 @@ int main()
         glfwPollEvents();
 
         camera.handle_keys(main_window->get_keys());
-        camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
+        //camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
         camera.update(dt);
-
-        current_angle += 0.5f;
-
-        if (current_angle >= 360.f)
-        {
-            current_angle = 0.f;
-        }
 
         // Clear the window
         glClearColor(0.f, 0.f, 0.f, 1.f);
@@ -116,7 +91,6 @@ int main()
 
         glm::mat4 model{1.f};
         model = glm::translate(model, glm::vec3{0.f, 0.f, -2.5f});
-        model = glm::rotate(model, to_radian(current_angle), glm::vec3{0.f, 1.f, 0.f});
         model = glm::scale(model, glm::vec3{0.4f, 0.4f, 1.f});
 
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
@@ -125,11 +99,8 @@ int main()
 
         brick_texture.use();
 
-        // Draw meshes
-        for (const auto& mesh: Data::mesh_list)
-        {
-            mesh->render();
-        }
+        // Draw Tangram pieces
+        tangram.render(Data::shader_list[0]);
 
         glUseProgram(0);
 
