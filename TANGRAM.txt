@@ -1,0 +1,6 @@
+ g++ TANGRAM-INTERACTIVO.cpp -o tangram -lGL -lGLEW -lglfw
+./tangram
+
+Usar TAB para cambiar de figura 
+z/x para que roten
+Flechas para que se muevan

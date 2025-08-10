@@ -1,0 +1,5 @@
+ g++ OPENGL-GAME.cpp -o game -lGL -lGLEW -lglfw
+./game
+
+mover el cuadrado rojo con las teclas arriba. abajo, a los lados 
+el fin del juego es que no se deje tocar por el cuadrado que esta en movimiento
