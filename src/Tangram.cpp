@@ -24,6 +24,174 @@ Tangram::Tangram(){
     create_pieces();
 }
 
+void Tangram::create_pieces(){
+    float depth = 0.2f;
+
+    // Large Triangle: (0,0), (0,8), (4,4)
+    {
+        std::vector<GLfloat> vertices = {
+            0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 0.8f, 0.0f, 0.0f, 1.0f,
+            0.4f, 0.4f, 0.0f, 0.5f, 0.5f,
+
+            0.0f, 0.0f, depth, 0.0f, 0.0f,
+            0.0f, 0.8f, depth, 0.0f, 1.0f,
+            0.4f, 0.4f, depth, 0.5f, 0.5f
+        };
+
+        std::vector<unsigned int> indices = {0, 1, 2,           // Front face
+                                             3, 4, 5,           // Back face
+                                             0,1,4,0,4,3,       // Side 1
+                                             1,2,5,1,5,4,       // Side 2
+                                             2,0,3,2,3,5 };     // Side 3
+
+        pieces.push_back(Mesh::create(vertices, indices));
+        piece_centers.push_back(calc_piece_center(vertices));
+    }
+
+    // Large Triangle 2: (0,8), (8,8), (4,4)
+    {
+        std::vector<GLfloat> vertices = {
+            0.0f, 0.8f, 0.0f, 0.0f, 1.0f,
+            0.8f, 0.8f, 0.0f, 1.0f, 1.0f,
+            0.4f, 0.4f, 0.0f, 0.5f, 0.5f,
+
+            0.0f, 0.8f, depth, 0.0f, 1.0f,
+            0.8f, 0.8f, depth, 1.0f, 1.0f,
+            0.4f, 0.4f, depth, 0.5f, 0.5f
+        };
+
+        std::vector<unsigned int> indices = {0, 1, 2,           // Front face
+                                             3, 4, 5,           // Back face
+                                             0,1,4,0,4,3,       // Side 1
+                                             1,2,5,1,5,4,       // Side 2
+                                             2,0,3,2,3,5 };     // Side 3
+
+        pieces.push_back(Mesh::create(vertices, indices));
+        piece_centers.push_back(calc_piece_center(vertices));
+    }
+
+    // Small Triangle: (2,2), (6,2), (4,4)
+    {
+        std::vector<GLfloat> vertices = {
+            0.2f, 0.2f, 0.0f, 0.25f, 0.25f,
+            0.6f, 0.2f, 0.0f, 0.75f, 0.25f,
+            0.4f, 0.4f, 0.0f, 0.5f, 0.5f,
+
+            0.2f, 0.2f, depth, 0.25f, 0.25f,
+            0.6f, 0.2f, depth, 0.75f, 0.25f,
+            0.4f, 0.4f, depth, 0.5f, 0.5f
+        };
+
+        std::vector<unsigned int> indices = {0, 1, 2,           // Front face
+                                             3, 4, 5,           // Back face
+                                             0,1,4,0,4,3,       // Side 1
+                                             1,2,5,1,5,4,       // Side 2
+                                             2,0,3,2,3,5 };     // Side 3
+
+        pieces.push_back(Mesh::create(vertices, indices));
+        piece_centers.push_back(calc_piece_center(vertices));
+    }
+
+    // Small Triangle: (8,4), (8,8), (6,6)
+    {
+        std::vector<GLfloat> vertices = {
+            0.8f, 0.4f, 0.0f, 1.0f, 0.5f,
+            0.8f, 0.8f, 0.0f, 1.0f, 1.0f,
+            0.6f, 0.6f, 0.0f, 0.75f, 0.75f,
+
+            0.8f, 0.4f, depth, 1.0f, 0.5f,
+            0.8f, 0.8f, depth, 1.0f, 1.0f,
+            0.6f, 0.6f, depth, 0.75f, 0.75f
+        };
+
+        std::vector<unsigned int> indices = {0, 1, 2,           // Front face
+                                             3, 4, 5,           // Back face
+                                             0,1,4,0,4,3,       // Side 1
+                                             1,2,5,1,5,4,       // Side 2
+                                             2,0,3,2,3,5 };     // Side 3
+                                        
+        pieces.push_back(Mesh::create(vertices, indices));
+        piece_centers.push_back(calc_piece_center(vertices));
+    }
+
+    // Square: (4,4), (6,2), (8,4), (6,6)
+    {
+        std::vector<GLfloat> vertices = {
+            0.4f, 0.4f, 0.0f, 0.5f, 0.5f,
+            0.6f, 0.2f, 0.0f, 0.7f, 0.3f,
+            0.8f, 0.4f, 0.0f, 0.9f, 0.5f,
+            0.6f, 0.6f, 0.0f, 0.7f, 0.7f,
+
+            0.4f, 0.4f, depth, 0.5f, 0.5f,
+            0.6f, 0.2f, depth, 0.7f, 0.3f,
+            0.8f, 0.4f, depth, 0.9f, 0.5f,
+            0.6f, 0.6f, depth, 0.7f, 0.7f
+        };
+
+        std::vector<unsigned int> indices = {0, 1, 2, 0, 2, 3,      // Front Face
+                                             4, 5, 6, 4, 6, 7,      // Back Face
+                                             0, 1, 5, 0, 5, 4,      // Sides
+                                             1, 2, 6, 1, 6, 5,
+                                             2, 3, 7, 2, 7, 6,
+                                             3, 0, 4, 3, 4, 7};
+        pieces.push_back(Mesh::create(vertices, indices));
+        piece_centers.push_back(calc_piece_center(vertices));
+    }
+
+    // Parallelogram: (0,0), (4,0), (6,2), (2,2)
+    {
+        std::vector<GLfloat> vertices = {
+            0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+            0.4f, 0.0f, 0.0f, 0.5f, 0.0f,
+            0.6f, 0.2f, 0.0f, 0.7f, 0.3f,
+            0.2f, 0.2f, 0.0f, 0.3f, 0.3f,
+
+            0.0f, 0.0f, depth, 0.0f, 0.0f,
+            0.4f, 0.0f, depth, 0.5f, 0.0f,
+            0.6f, 0.2f, depth, 0.7f, 0.3f,
+            0.2f, 0.2f, depth, 0.3f, 0.3f
+        };
+
+        std::vector<unsigned int> indices = {0, 1, 2, 0, 2, 3,      // Front Face
+                                             4, 5, 6, 4, 6, 7,      // Back Face
+                                             0, 1, 5, 0, 5, 4,      // Sides
+                                             1, 2, 6, 1, 6, 5,
+                                             2, 3, 7, 2, 7, 6,
+                                             3, 0, 4, 3, 4, 7};
+
+        pieces.push_back(Mesh::create(vertices, indices));
+        piece_centers.push_back(calc_piece_center(vertices));
+    }
+
+    // Triangle: (4,0), (8,0), (8,4)
+    {
+        std::vector<GLfloat> vertices = {
+            0.4f, 0.0f, 0.0f, 0.5f, 0.0f,
+            0.8f, 0.0f, 0.0f, 0.9f, 0.0f,
+            0.8f, 0.4f, 0.0f, 0.9f, 0.5f,
+
+            0.4f, 0.0f, depth, 0.5f, 0.0f,
+            0.8f, 0.0f, depth, 0.9f, 0.0f,
+            0.8f, 0.4f, depth, 0.9f, 0.5f
+        };
+        std::vector<unsigned int> indices = {0, 1, 2,           // Front face
+                                             3, 4, 5,           // Back face
+                                             0,1,4,0,4,3,       // Side 1
+                                             1,2,5,1,5,4,       // Side 2
+                                             2,0,3,2,3,5 };     // Side 3
+
+        pieces.push_back(Mesh::create(vertices, indices));
+        piece_centers.push_back(calc_piece_center(vertices));
+    }
+
+
+    // Ensure transformations has the same size as pieces
+    transformations.resize(pieces.size(), glm::mat4(1.0f));
+    piece_positions.resize(pieces.size(), glm::vec2(0.0f));
+    piece_rotations.resize(pieces.size(), 0.0f);
+}
+
 glm::vec2 Tangram::calc_piece_center(std::vector<GLfloat> vertices){
     float cx = 0.0f, cy = 0.0f;
     int num_verts = vertices.size() / 5;
@@ -39,6 +207,7 @@ glm::vec2 Tangram::calc_piece_center(std::vector<GLfloat> vertices){
     return glm::vec2(cx, cy);
 }
 
+<<<<<<< HEAD
 void Tangram::create_pieces()
 {
     // Large Triangle: (0,0), (0,8), (4,4)
@@ -159,12 +328,13 @@ void Tangram::update(float deltaTime, const std::array<bool, 1024> &keys)
         if (keys[GLFW_KEY_A])
             transform = glm::translate(transform, glm::vec3(moveSpeed, 0.f, 0.f));
 =======
+=======
+>>>>>>> c2f6e93 (now pieces have depth)
 void Tangram::handle_keys(const std::array<bool, 1024>& keys){
     if (keys[GLFW_KEY_TAB]) {
         selected_piece = (selected_piece + 1) % pieces.size();
     }
 
-    glm::vec3 translation(0.0f);
     if (keys[GLFW_KEY_UP]) piece_positions[selected_piece].y += move_step;
     if (keys[GLFW_KEY_DOWN]) piece_positions[selected_piece].y -= move_step;
     if (keys[GLFW_KEY_LEFT]) piece_positions[selected_piece].x -= move_step;
