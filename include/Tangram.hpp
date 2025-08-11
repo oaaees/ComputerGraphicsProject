@@ -12,8 +12,6 @@
 
 #include <Texture.hpp>
 #include <Mesh.hpp>
-#include <GLFW/glfw3.h>
-#include <array>
 #include <Shader.hpp>
 
 class Tangram{
