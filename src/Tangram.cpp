@@ -1,25 +1,7 @@
-#include <vector>
-#include <memory>
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <Mesh.hpp>
 #include <Shader.hpp>
-#include <Texture.hpp>
-
-class Tangram
-{
-public:
-    Tangram();
-    void initialize();
-    void update(float deltaTime);
-    void render(const std::shared_ptr<Shader>& shader);
-
-private:
-    std::vector<std::shared_ptr<Mesh>> pieces;
-    std::vector<glm::mat4> transformations;
-    void create_pieces();
-};
+#include <Tangram.hpp>
 
 Tangram::Tangram()
 {
@@ -38,8 +20,7 @@ void Tangram::create_pieces()
         std::vector<GLfloat> vertices = {
             0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
             0.0f, 0.8f, 0.0f, 0.0f, 1.0f,
-            0.4f, 0.4f, 0.0f, 0.5f, 0.5f
-        };
+            0.4f, 0.4f, 0.0f, 0.5f, 0.5f};
         std::vector<unsigned int> indices = {0, 1, 2};
         pieces.push_back(Mesh::create(vertices, indices));
     }
@@ -49,8 +30,7 @@ void Tangram::create_pieces()
         std::vector<GLfloat> vertices = {
             0.0f, 0.8f, 0.0f, 0.0f, 1.0f,
             0.8f, 0.8f, 0.0f, 1.0f, 1.0f,
-            0.4f, 0.4f, 0.0f, 0.5f, 0.5f
-        };
+            0.4f, 0.4f, 0.0f, 0.5f, 0.5f};
         std::vector<unsigned int> indices = {0, 1, 2};
         pieces.push_back(Mesh::create(vertices, indices));
     }
@@ -60,8 +40,7 @@ void Tangram::create_pieces()
         std::vector<GLfloat> vertices = {
             0.2f, 0.2f, 0.0f, 0.25f, 0.25f,
             0.6f, 0.2f, 0.0f, 0.75f, 0.25f,
-            0.4f, 0.4f, 0.0f, 0.5f, 0.5f
-        };
+            0.4f, 0.4f, 0.0f, 0.5f, 0.5f};
         std::vector<unsigned int> indices = {0, 1, 2};
         pieces.push_back(Mesh::create(vertices, indices));
     }
@@ -71,8 +50,7 @@ void Tangram::create_pieces()
         std::vector<GLfloat> vertices = {
             0.8f, 0.4f, 0.0f, 1.0f, 0.5f,
             0.8f, 0.8f, 0.0f, 1.0f, 1.0f,
-            0.6f, 0.6f, 0.0f, 0.75f, 0.75f
-        };
+            0.6f, 0.6f, 0.0f, 0.75f, 0.75f};
         std::vector<unsigned int> indices = {0, 1, 2};
         pieces.push_back(Mesh::create(vertices, indices));
     }
@@ -83,8 +61,7 @@ void Tangram::create_pieces()
             0.4f, 0.4f, 0.0f, 0.5f, 0.5f,
             0.6f, 0.2f, 0.0f, 0.7f, 0.3f,
             0.8f, 0.4f, 0.0f, 0.9f, 0.5f,
-            0.6f, 0.6f, 0.0f, 0.7f, 0.7f
-        };
+            0.6f, 0.6f, 0.0f, 0.7f, 0.7f};
         std::vector<unsigned int> indices = {0, 1, 2, 0, 2, 3};
         pieces.push_back(Mesh::create(vertices, indices));
     }
@@ -95,8 +72,7 @@ void Tangram::create_pieces()
             0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
             0.4f, 0.0f, 0.0f, 0.5f, 0.0f,
             0.6f, 0.2f, 0.0f, 0.7f, 0.3f,
-            0.2f, 0.2f, 0.0f, 0.3f, 0.3f
-        };
+            0.2f, 0.2f, 0.0f, 0.3f, 0.3f};
         std::vector<unsigned int> indices = {0, 1, 2, 0, 2, 3};
         pieces.push_back(Mesh::create(vertices, indices));
     }
@@ -106,8 +82,7 @@ void Tangram::create_pieces()
         std::vector<GLfloat> vertices = {
             0.4f, 0.0f, 0.0f, 0.5f, 0.0f,
             0.8f, 0.0f, 0.0f, 0.9f, 0.0f,
-            0.8f, 0.4f, 0.0f, 0.9f, 0.5f
-        };
+            0.8f, 0.4f, 0.0f, 0.9f, 0.5f};
         std::vector<unsigned int> indices = {0, 1, 2};
         pieces.push_back(Mesh::create(vertices, indices));
     }
@@ -116,9 +91,37 @@ void Tangram::create_pieces()
     transformations.resize(pieces.size(), glm::mat4(1.0f));
 }
 
-void Tangram::update(float deltaTime)
+void Tangram::select_piece(int index)
 {
-    // Update logic for tangram pieces (e.g., handle user interactions)
+    if (index >= 0 && index < static_cast<int>(pieces.size()))
+    {
+        selected_piece = index;
+    }
+}
+
+void Tangram::deselect_piece()
+{
+    selected_piece = -1;
+}
+
+void Tangram::update(float deltaTime, const std::array<bool, 1024> &keys)
+{
+    if (selected_piece != -1)
+    {
+        // glm::mat4 &transform = transformations[selected_piece];
+        float moveSpeed = 1.0f * deltaTime;
+
+        glm::mat4 &transform = transformations[selected_piece];
+
+        if (keys[GLFW_KEY_W])
+            transform = glm::translate(transform, glm::vec3(0.f, moveSpeed, 0.f));
+        if (keys[GLFW_KEY_S])
+            transform = glm::translate(transform, glm::vec3(0.f, -moveSpeed, 0.f));
+        if (keys[GLFW_KEY_D])
+            transform = glm::translate(transform, glm::vec3(-moveSpeed, 0.f, 0.f));
+        if (keys[GLFW_KEY_A])
+            transform = glm::translate(transform, glm::vec3(moveSpeed, 0.f, 0.f));
+    }
 }
 
 void Tangram::render(const std::shared_ptr<Shader>& shader)

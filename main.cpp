@@ -79,8 +79,27 @@ int main()
         // Get and handle user input events
         glfwPollEvents();
 
-        camera.handle_keys(main_window->get_keys());
+        // Selección de piezas
+        if (main_window->get_keys()[GLFW_KEY_KP_1] || main_window->get_keys()[GLFW_KEY_1]) tangram.select_piece(0);
+        if (main_window->get_keys()[GLFW_KEY_KP_2] || main_window->get_keys()[GLFW_KEY_2]) tangram.select_piece(1);
+        if (main_window->get_keys()[GLFW_KEY_KP_3] || main_window->get_keys()[GLFW_KEY_3]) tangram.select_piece(2);
+        if (main_window->get_keys()[GLFW_KEY_KP_4] || main_window->get_keys()[GLFW_KEY_4]) tangram.select_piece(3);
+        if (main_window->get_keys()[GLFW_KEY_KP_5] || main_window->get_keys()[GLFW_KEY_5]) tangram.select_piece(4);
+        if (main_window->get_keys()[GLFW_KEY_KP_6] || main_window->get_keys()[GLFW_KEY_6]) tangram.select_piece(5);
+        if (main_window->get_keys()[GLFW_KEY_KP_7] || main_window->get_keys()[GLFW_KEY_7]) tangram.select_piece(6);
+        if (main_window->get_keys()[GLFW_KEY_KP_0] || main_window->get_keys()[GLFW_KEY_0]) tangram.deselect_piece();
+
+        bool piece_selected = tangram.has_selected_piece();
+
+        if (!piece_selected)
+        {
+            // Control normal de cámara
+            camera.handle_keys(main_window->get_keys());
+        }
+
+        // camera.handle_keys(main_window->get_keys());
         //camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
+        tangram.update(dt, main_window->get_keys());
         camera.update(dt);
 
         // Clear the window
@@ -89,11 +108,11 @@ int main()
 
         Data::shader_list[0]->use();
 
-        glm::mat4 model{1.f};
-        model = glm::translate(model, glm::vec3{0.f, 0.f, -2.5f});
-        model = glm::scale(model, glm::vec3{0.4f, 0.4f, 1.f});
+        // glm::mat4 model{1.f};
+        // model = glm::translate(model, glm::vec3{0.f, 0.f, -2.5f});
+        // model = glm::scale(model, glm::vec3{0.4f, 0.4f, 1.f});
 
-        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
+        // glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_projection_id(), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_view_id(), 1, GL_FALSE, glm::value_ptr(camera.get_view_matrix()));
 

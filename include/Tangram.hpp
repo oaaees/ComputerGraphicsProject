@@ -7,31 +7,27 @@
 #include <glm/glm.hpp>
 #include <Texture.hpp>
 #include <Mesh.hpp>
+#include <GLFW/glfw3.h>
+#include <array>
 
 class Tangram
 {
 public:
     Tangram();
-
     void initialize();
-    void update(float deltaTime);
-    void render(const std::shared_ptr<Shader>& shader);
+    void update(float deltaTime, const std::array<bool, 1024>& keys); // ahora recibe el teclado
+    void render(const std::shared_ptr<Shader> &shader);
 
-    void handle_input(int key, int action);
-    void select_piece(double mouse_x, double mouse_y);
-    void release_piece();
-    
+    void select_piece(int index); // seleccionar pieza
+    void deselect_piece();        // quitar selección
+    bool has_selected_piece() const { return selected_piece != -1; }
+
 private:
     std::vector<std::shared_ptr<Mesh>> pieces;
-    std::vector<Texture> textures;
-    glm::mat4 model_matrix;
-
-    std::vector<glm::vec2> piece_positions; // Add this for 2D positions
-    int selected_piece = -1;
-    bool dragging = false;
+    std::vector<glm::mat4> transformations;
+    int selected_piece = -1; // -1 = ninguna seleccionada
 
     void create_pieces();
-    void load_textures();
 };
 
 #endif // TANGRAM_HPP
