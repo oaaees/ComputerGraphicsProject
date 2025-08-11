@@ -79,6 +79,7 @@ int main()
         glfwPollEvents();
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         // Selección de piezas
         if (main_window->get_keys()[GLFW_KEY_KP_1] || main_window->get_keys()[GLFW_KEY_1]) tangram.select_piece(0);
         if (main_window->get_keys()[GLFW_KEY_KP_2] || main_window->get_keys()[GLFW_KEY_2]) tangram.select_piece(1);
@@ -106,6 +107,11 @@ int main()
         //camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
         //camera.update(dt);
 >>>>>>> 6e700d4 (just shows tangram)
+=======
+        camera.handle_keys(main_window->get_keys());
+        camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
+        camera.update(dt);
+>>>>>>> d5d394d (pieces now move around their center)
 
         tangram.handle_keys(main_window->get_keys());
 
@@ -115,9 +121,15 @@ int main()
 
         Data::shader_list[0]->use();
 
+<<<<<<< HEAD
         // glm::mat4 model{1.f};
         // model = glm::translate(model, glm::vec3{0.f, 0.f, -2.5f});
         // model = glm::scale(model, glm::vec3{0.4f, 0.4f, 1.f});
+=======
+        glm::mat4 model{1.f};
+        model = glm::translate(model, glm::vec3{0.f, 0.f, 0.f});
+        model = glm::scale(model, glm::vec3{-3.f, 3.f, 1.f});
+>>>>>>> d5d394d (pieces now move around their center)
 
         // glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_projection_id(), 1, GL_FALSE, glm::value_ptr(projection));
@@ -126,7 +138,7 @@ int main()
         brick_texture.use();
 
         // Draw Tangram pieces
-        tangram.render(Data::shader_list[0]);
+        tangram.render(Data::shader_list[0], model);
 
         glUseProgram(0);
 

@@ -16,27 +16,17 @@ glm::mat4 Camera::get_view_matrix() const noexcept
     return glm::lookAt(position, position + front, up);
 }
 
-void Camera::handle_keys(const std::array<bool, 1024>& keys) noexcept
-{
+void Camera::handle_keys(const std::array<bool, 1024>& keys) noexcept {
+    velocity = glm::vec3{0.f, 0.f, 0.f}; // Reset velocity each frame
+
     if (keys[GLFW_KEY_W])
-    {
-        velocity = front * movement_speed;
-    }
-
+        velocity += front * movement_speed;
     if (keys[GLFW_KEY_S])
-    {
-        velocity = -front * movement_speed;
-    }
-
+        velocity -= front * movement_speed;
     if (keys[GLFW_KEY_D])
-    {
-        velocity = right * movement_speed;
-    }
-
+        velocity += right * movement_speed;
     if (keys[GLFW_KEY_A])
-    {
-        velocity = -right * movement_speed;
-    }
+        velocity -= right * movement_speed;
 }
 
 void Camera::handle_mouse(GLfloat x_change, GLfloat y_change) noexcept
