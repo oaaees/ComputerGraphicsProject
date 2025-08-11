@@ -35,6 +35,8 @@ class Tangram{
 
         std::vector<glm::vec2> piece_positions; // x, y position for each piece
         std::vector<float> piece_rotations;     // rotation angle for each piece
+
+        bool changed_selection = false;
 };
 
 #endif // TANGRAM_HPP

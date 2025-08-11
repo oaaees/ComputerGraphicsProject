@@ -135,7 +135,9 @@ int main()
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_projection_id(), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_view_id(), 1, GL_FALSE, glm::value_ptr(camera.get_view_matrix()));
 
+        glActiveTexture(GL_TEXTURE0);
         brick_texture.use();
+        glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "tex_sampler"), 0);
 
         // Draw Tangram pieces
         tangram.render(Data::shader_list[0], model);

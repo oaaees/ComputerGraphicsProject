@@ -332,7 +332,12 @@ void Tangram::update(float deltaTime, const std::array<bool, 1024> &keys)
 >>>>>>> c2f6e93 (now pieces have depth)
 void Tangram::handle_keys(const std::array<bool, 1024>& keys){
     if (keys[GLFW_KEY_TAB]) {
-        selected_piece = (selected_piece + 1) % pieces.size();
+        if (!changed_selection) {
+            selected_piece = (selected_piece + 1) % pieces.size();
+            changed_selection = true;
+        }
+    } else {
+        changed_selection = false;
     }
 
     if (keys[GLFW_KEY_UP]) piece_positions[selected_piece].y += move_step;
@@ -340,6 +345,7 @@ void Tangram::handle_keys(const std::array<bool, 1024>& keys){
     if (keys[GLFW_KEY_LEFT]) piece_positions[selected_piece].x -= move_step;
     if (keys[GLFW_KEY_RIGHT]) piece_positions[selected_piece].x += move_step;
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     if (translation.x != 0.0f || translation.y != 0.0f) {
         transformations[selected_piece] = glm::translate(transformations[selected_piece], translation);
@@ -356,6 +362,10 @@ void Tangram::handle_keys(const std::array<bool, 1024>& keys){
     if (keys[GLFW_KEY_O]) piece_rotations[selected_piece] += rotate_step;
     if (keys[GLFW_KEY_P]) piece_rotations[selected_piece] -= rotate_step;
 >>>>>>> d5d394d (pieces now move around their center)
+=======
+    if (keys[GLFW_KEY_Q]) piece_rotations[selected_piece] += rotate_step;
+    if (keys[GLFW_KEY_E]) piece_rotations[selected_piece] -= rotate_step;
+>>>>>>> 67703b0 (now it uses textures!)
 }
 
 void Tangram::render(const std::shared_ptr<Shader>& shader, glm::mat4& global_model)
@@ -379,9 +389,16 @@ void Tangram::render(const std::shared_ptr<Shader>& shader, glm::mat4& global_mo
         model = glm::translate(model, -glm::vec3(piece_centers[i], 0.0f));            // Move back
         glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
 
+        // Highlight selected piece
+        glm::vec3 color = colors[i];
+        if (i != selected_piece) {
+            color *= 0.8f; // Make it brighter
+            color = glm::clamp(color, 0.0f, 1.0f); // Clamp to valid range
+        }
+
         // Set color uniform
         GLint colorLoc = glGetUniformLocation(shader->get_program_id(), "piece_color");
-        glUniform3fv(colorLoc, 1, glm::value_ptr(colors[i]));
+        glUniform3fv(colorLoc, 1, glm::value_ptr(color));
 
         pieces[i]->render();
     }
