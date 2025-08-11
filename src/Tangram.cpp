@@ -1,6 +1,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <Shader.hpp>
+<<<<<<< HEAD
 #include <Tangram.hpp>
 
 Tangram::Tangram()
@@ -10,12 +11,19 @@ Tangram::Tangram()
 
 void Tangram::initialize()
 {
+=======
+#include <Texture.hpp>
+
+#include <Tangram.hpp>
+
+Tangram::Tangram(){
+>>>>>>> 6e700d4 (just shows tangram)
     create_pieces();
 }
 
 void Tangram::create_pieces()
 {
-    // Large Pink Triangle: (0,0), (0,8), (4,4)
+    // Large Triangle: (0,0), (0,8), (4,4)
     {
         std::vector<GLfloat> vertices = {
             0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -25,7 +33,7 @@ void Tangram::create_pieces()
         pieces.push_back(Mesh::create(vertices, indices));
     }
 
-    // Large Blue Triangle: (0,8), (8,8), (4,4)
+    // Large Triangle 2: (0,8), (8,8), (4,4)
     {
         std::vector<GLfloat> vertices = {
             0.0f, 0.8f, 0.0f, 0.0f, 1.0f,
@@ -35,7 +43,7 @@ void Tangram::create_pieces()
         pieces.push_back(Mesh::create(vertices, indices));
     }
 
-    // Small Turquoise Triangle: (2,2), (6,2), (4,4)
+    // Small Triangle: (2,2), (6,2), (4,4)
     {
         std::vector<GLfloat> vertices = {
             0.2f, 0.2f, 0.0f, 0.25f, 0.25f,
@@ -45,7 +53,7 @@ void Tangram::create_pieces()
         pieces.push_back(Mesh::create(vertices, indices));
     }
 
-    // Small Red Triangle: (8,4), (8,8), (6,6)
+    // Small Triangle: (8,4), (8,8), (6,6)
     {
         std::vector<GLfloat> vertices = {
             0.8f, 0.4f, 0.0f, 1.0f, 0.5f,
@@ -55,7 +63,7 @@ void Tangram::create_pieces()
         pieces.push_back(Mesh::create(vertices, indices));
     }
 
-    // Green Square: (4,4), (6,2), (8,4), (6,6)
+    // Square: (4,4), (6,2), (8,4), (6,6)
     {
         std::vector<GLfloat> vertices = {
             0.4f, 0.4f, 0.0f, 0.5f, 0.5f,
@@ -66,7 +74,7 @@ void Tangram::create_pieces()
         pieces.push_back(Mesh::create(vertices, indices));
     }
 
-    // Orange Parallelogram: (0,0), (4,0), (6,2), (2,2)
+    // Parallelogram: (0,0), (4,0), (6,2), (2,2)
     {
         std::vector<GLfloat> vertices = {
             0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -77,7 +85,7 @@ void Tangram::create_pieces()
         pieces.push_back(Mesh::create(vertices, indices));
     }
 
-    // Purple Triangle: (4,0), (8,0), (8,4)
+    // Triangle: (4,0), (8,0), (8,4)
     {
         std::vector<GLfloat> vertices = {
             0.4f, 0.0f, 0.0f, 0.5f, 0.0f,
@@ -137,14 +145,13 @@ void Tangram::render(const std::shared_ptr<Shader>& shader)
         {0.5f, 0.0f, 0.5f}  // Purple
     };
 
-    for (size_t i = 0; i < pieces.size(); ++i)
-    {
+    for (size_t i = 0; i < pieces.size(); ++i){
         glm::mat4 model = transformations[i];
         glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
 
         // Set color uniform
         GLint colorLoc = glGetUniformLocation(shader->get_program_id(), "piece_color");
-        glUniform3fv(colorLoc, 1, glm::value_ptr(colors[i % colors.size()]));
+        glUniform3fv(colorLoc, 1, glm::value_ptr(colors[i]));
 
         pieces[i]->render();
     }

@@ -52,8 +52,7 @@ int main()
 
     auto main_window = Window::create(WIDTH, HEIGHT, "Tangram Puzzle");
 
-    if (main_window == nullptr)
-    {
+    if (main_window == nullptr){
         return EXIT_FAILURE;
     }
 
@@ -79,6 +78,7 @@ int main()
         // Get and handle user input events
         glfwPollEvents();
 
+<<<<<<< HEAD
         // Selección de piezas
         if (main_window->get_keys()[GLFW_KEY_KP_1] || main_window->get_keys()[GLFW_KEY_1]) tangram.select_piece(0);
         if (main_window->get_keys()[GLFW_KEY_KP_2] || main_window->get_keys()[GLFW_KEY_2]) tangram.select_piece(1);
@@ -101,6 +101,11 @@ int main()
         //camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
         tangram.update(dt, main_window->get_keys());
         camera.update(dt);
+=======
+        //camera.handle_keys(main_window->get_keys());
+        //camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
+        //camera.update(dt);
+>>>>>>> 6e700d4 (just shows tangram)
 
         // Clear the window
         glClearColor(0.f, 0.f, 0.f, 1.f);
