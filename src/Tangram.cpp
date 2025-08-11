@@ -230,7 +230,7 @@ void Tangram::render(const std::shared_ptr<Shader>& shader, glm::mat4& global_mo
         // Highlight selected piece
         glm::vec3 color = colors[i];
         if (i != selected_piece) {
-            color *= 0.8f; // Make it brighter
+            color *= 0.7f; // Make it brighter
             color = glm::clamp(color, 0.0f, 1.0f); // Clamp to valid range
         }
 
