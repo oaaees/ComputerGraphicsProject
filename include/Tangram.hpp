@@ -2,25 +2,34 @@
 #define TANGRAM_HPP
 
 #include <vector>
-#include <memory>
+#include <array>
+
 #include <GL/glew.h>
+#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include <Texture.hpp>
 #include <Mesh.hpp>
 #include <GLFW/glfw3.h>
 #include <array>
+#include <Shader.hpp>
 
 class Tangram{
     public:
         Tangram();
-        void initialize();
-        void update(float deltaTime);
         void render(const std::shared_ptr<Shader>& shader);
+        void handle_keys(const std::array<bool, 1024>& keys);
 
     private:
         std::vector<std::shared_ptr<Mesh>> pieces;
         std::vector<glm::mat4> transformations;
         void create_pieces();
+
+        int selected_piece = 0;
+        const float move_step = 0.01f;
+        const float rotate_step = glm::radians(1.0f);
 };
 
 #endif // TANGRAM_HPP

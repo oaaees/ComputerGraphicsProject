@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <Shader.hpp>
@@ -14,6 +15,8 @@ void Tangram::initialize()
 =======
 #include <Texture.hpp>
 
+=======
+>>>>>>> c176f33 (pieces can move and rotate)
 #include <Tangram.hpp>
 
 Tangram::Tangram(){
@@ -99,6 +102,7 @@ void Tangram::create_pieces()
     transformations.resize(pieces.size(), glm::mat4(1.0f));
 }
 
+<<<<<<< HEAD
 void Tangram::select_piece(int index)
 {
     if (index >= 0 && index < static_cast<int>(pieces.size()))
@@ -129,6 +133,28 @@ void Tangram::update(float deltaTime, const std::array<bool, 1024> &keys)
             transform = glm::translate(transform, glm::vec3(-moveSpeed, 0.f, 0.f));
         if (keys[GLFW_KEY_A])
             transform = glm::translate(transform, glm::vec3(moveSpeed, 0.f, 0.f));
+=======
+void Tangram::handle_keys(const std::array<bool, 1024>& keys){
+    if (keys[GLFW_KEY_TAB]) {
+        selected_piece = (selected_piece + 1) % pieces.size();
+    }
+
+    glm::vec3 translation(0.0f);
+    if (keys[GLFW_KEY_W]) translation.y += move_step;
+    if (keys[GLFW_KEY_S]) translation.y -= move_step;
+    if (keys[GLFW_KEY_A]) translation.x -= move_step;
+    if (keys[GLFW_KEY_D]) translation.x += move_step;
+
+    if (translation.x != 0.0f || translation.y != 0.0f) {
+        transformations[selected_piece] = glm::translate(transformations[selected_piece], translation);
+    }
+
+    if (keys[GLFW_KEY_Q]) {
+        transformations[selected_piece] = glm::rotate(transformations[selected_piece], rotate_step, glm::vec3(0, 0, 1));
+    }
+    if (keys[GLFW_KEY_E]) {
+        transformations[selected_piece] = glm::rotate(transformations[selected_piece], -rotate_step, glm::vec3(0, 0, 1));
+>>>>>>> c176f33 (pieces can move and rotate)
     }
 }
 

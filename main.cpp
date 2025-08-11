@@ -107,6 +107,8 @@ int main()
         //camera.update(dt);
 >>>>>>> 6e700d4 (just shows tangram)
 
+        tangram.handle_keys(main_window->get_keys());
+
         // Clear the window
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
