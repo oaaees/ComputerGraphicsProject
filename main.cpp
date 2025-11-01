@@ -1,5 +1,4 @@
 #include <iostream>
-#include <string>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -11,33 +10,23 @@
 #include <Camera.hpp>
 #include <Mesh.hpp>
 #include <Shader.hpp>
-#include <Texture.hpp>
 #include <Window.hpp>
-
-#include <Tangram.hpp>
+#include <Room.hpp>
 
 namespace fs = std::filesystem;
 
 struct Data
 {
-    static std::vector<std::shared_ptr<Mesh>> mesh_list;
     static std::vector<std::shared_ptr<Shader>> shader_list;
     static const fs::path root_path;
     static const fs::path vertex_shader_path;
     static const fs::path fragment_shader_path;
 };
 
-std::vector<std::shared_ptr<Mesh>> Data::mesh_list{};
 std::vector<std::shared_ptr<Shader>> Data::shader_list{};
-
 const fs::path Data::root_path{fs::path{__FILE__}.parent_path()};
 const fs::path Data::vertex_shader_path{Data::root_path / "shaders" / "shader.vert"};
 const fs::path Data::fragment_shader_path{Data::root_path / "shaders" / "shader.frag"};
-
-float to_radian(float degrees)
-{
-    return degrees * M_PI / 180.f;
-}
 
 void create_shaders_program() noexcept
 {
@@ -50,25 +39,24 @@ int main()
     constexpr GLint WIDTH = 800;
     constexpr GLint HEIGHT = 600;
 
-    auto main_window = Window::create(WIDTH, HEIGHT, "Tangram Puzzle");
+    auto main_window = Window::create(WIDTH, HEIGHT, "The Room");
 
     if (main_window == nullptr){
         return EXIT_FAILURE;
     }
 
     create_shaders_program();
+    
+    // Place camera inside the room
+    Camera camera{glm::vec3{0.f, 1.f, 0.f}, glm::vec3{0.f, 1.f, 0.f}, -90.f, 0.f, 5.f, 0.15f};
 
-    Camera camera{glm::vec3{0.f, 0.f, -5.f}, glm::vec3{0.f, 1.f, 0.f}, 0.f, 90.f, 2.f, 20.f};
-
-    Texture brick_texture{Data::root_path / "textures" / "brick.png"};
-    brick_texture.load();
-
-    Tangram tangram;
+    // Create the room
+    Room room(Data::root_path);
 
     glm::mat4 projection = glm::perspective(45.f, main_window->get_aspect_ratio(), 0.1f, 100.f);
 
     GLfloat last_time = glfwGetTime();
-    
+
     while (!main_window->should_be_closed())
     {
         GLfloat now = glfwGetTime();
@@ -82,31 +70,21 @@ int main()
         camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
         camera.update(dt);
 
-        tangram.handle_keys(main_window->get_keys());
-
         // Clear the window
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         Data::shader_list[0]->use();
 
-        glm::mat4 model{1.f};
-        model = glm::translate(model, glm::vec3{0.f, 0.f, 0.f});
-        model = glm::scale(model, glm::vec3{-3.f, 3.f, 1.f});
-
-        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_projection_id(), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_view_id(), 1, GL_FALSE, glm::value_ptr(camera.get_view_matrix()));
 
-        brick_texture.use();
-
-        // Draw Tangram pieces
-        tangram.render(Data::shader_list[0], model);
+        room.render(Data::shader_list[0]);
 
         glUseProgram(0);
 
         main_window->swap_buffers();
     }
-    
+
     return EXIT_SUCCESS;
 }

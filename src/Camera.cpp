@@ -31,22 +31,18 @@ void Camera::handle_keys(const std::array<bool, 1024>& keys) noexcept {
 
 void Camera::handle_mouse(GLfloat x_change, GLfloat y_change) noexcept
 {
-    x_rotation = x_change * rotation_speed;
-    y_rotation = -y_change * rotation_speed;
+    yaw += x_change * rotation_speed;
+    pitch += y_change * rotation_speed;
+
+    pitch = std::max(-89.f, std::min(89.f, pitch));
 }
 
 void Camera::update(GLfloat dt) noexcept
 {
     position += velocity * dt;
-    pitch += y_rotation * dt;
-    yaw += x_rotation * dt;
-
-    pitch = std::max(-89.f, std::min(89.f, pitch));
 
     update_vectors();
     velocity = glm::vec3{0.f, 0.f, 0.f};
-    x_rotation = 0.f;
-    y_rotation = 0.f;
 }
 
 void Camera::update_vectors() noexcept

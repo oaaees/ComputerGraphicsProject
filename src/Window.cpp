@@ -40,6 +40,17 @@ std::shared_ptr<Window> Window::create(GLint width, GLint height, std::string_vi
         return nullptr;
     }
     
+    // Get primary monitor resolution and center the window
+    const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    if (mode)
+    {
+        int screen_width = mode->width;
+        int screen_height = mode->height;
+        int x_pos = (screen_width - width) / 2;
+        int y_pos = (screen_height - height) / 2;
+        glfwSetWindowPos(window->window, x_pos, y_pos);
+    }
+
     // Set context for GLEW
     glfwMakeContextCurrent(window->window);
 
@@ -61,6 +72,9 @@ std::shared_ptr<Window> Window::create(GLint width, GLint height, std::string_vi
 
     // Setup viewport
     glViewport(0, 0, window->buffer_width, window->buffer_height);
+
+    // Lock and hide cursor for FPS-style camera
+    glfwSetInputMode(window->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glfwSetWindowUserPointer(window->window, window.get());
 
@@ -142,7 +156,7 @@ void Window::handle_mouse(GLFWwindow* window, double x_pos, double y_pos) noexce
     }
     
     window_obj->x_change = x_pos - window_obj->last_x;
-    window_obj->y_change = y_pos - window_obj->last_y;
+    window_obj->y_change = window_obj->last_y - y_pos;
     window_obj->last_x = x_pos;
     window_obj->last_y = y_pos;
 }

@@ -67,6 +67,7 @@ void Shader::create_program(std::string_view vertex_shader_code, std::string_vie
     uniform_model_id = glGetUniformLocation(program_id, "model");
     uniform_view_id = glGetUniformLocation(program_id, "view");
     uniform_projection_id = glGetUniformLocation(program_id, "projection");
+    uniform_texture_sampler_id = glGetUniformLocation(program_id, "texture_sampler");
 }
 
 void Shader::create_shader(std::string_view shader_code, GLenum shader_type) noexcept
@@ -109,6 +110,7 @@ void Shader::clear() noexcept
     uniform_projection_id = 0;
     uniform_view_id = 0;
     uniform_model_id = 0;
+    uniform_texture_sampler_id = 0;
 }
 
 std::string Shader::read_file(const std::filesystem::path& shader_path) noexcept

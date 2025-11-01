@@ -1,6 +1,6 @@
 #include <Mesh.hpp>
 
-std::shared_ptr<Mesh> Mesh::create(const std::vector<GLfloat>& vertices, std::vector<unsigned int>& indices) noexcept
+std::shared_ptr<Mesh> Mesh::create(const std::vector<GLfloat>& vertices, std::vector<unsigned int> indices) noexcept
 {
     auto mesh = std::make_shared<Mesh>();
 
@@ -17,10 +17,15 @@ std::shared_ptr<Mesh> Mesh::create(const std::vector<GLfloat>& vertices, std::ve
     glBindBuffer(GL_ARRAY_BUFFER, mesh->VBO_id);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), vertices.data(), GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 5, nullptr);
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 8, nullptr);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 5, reinterpret_cast<void*>(sizeof(GLfloat) * 3));
+    // Normal attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 8, reinterpret_cast<void*>(sizeof(GLfloat) * 3));
     glEnableVertexAttribArray(1);
+    // Texture Coordinate attribute
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 8, reinterpret_cast<void*>(sizeof(GLfloat) * 6));
+    glEnableVertexAttribArray(2);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -60,7 +65,7 @@ void Mesh::clear() noexcept
 
     if (VAO_id != 0)
     {
-        glDeleteBuffers(1, &VAO_id);
+        glDeleteVertexArrays(1, &VAO_id);
         VAO_id = 0;
     }
 }

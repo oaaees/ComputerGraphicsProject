@@ -15,7 +15,8 @@ Texture::~Texture()
 
 void Texture::load() noexcept
 {
-    unsigned char* tex_data = stbi_load(file_path.c_str(), &width, &height, &bit_depth, 0);
+    // Force 4 channels (RGBA) to ensure consistency
+    unsigned char* tex_data = stbi_load(file_path.c_str(), &width, &height, &bit_depth, 4);
 
     if (!tex_data)
     {
@@ -31,7 +32,7 @@ void Texture::load() noexcept
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
+    
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_data);
     glGenerateMipmap(GL_TEXTURE_2D);
 

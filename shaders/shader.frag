@@ -1,13 +1,13 @@
 #version 410
 
 in vec2 texture_coordinates;
+in vec3 Normal;
 
 out vec4 color;
-uniform vec3 piece_color;
-uniform sampler2D tex_sampler;
+
+uniform sampler2D texture_sampler;
 
 void main()
 {
-    vec4 tex_color = texture(tex_sampler, texture_coordinates);
-    color = vec4(piece_color, 1.0) * tex_color;
+    color = texture(texture_sampler, texture_coordinates);
 }
