@@ -54,4 +54,11 @@ private:
     GLuint uniform_view_id{0};
     GLuint uniform_model_id{0};
     GLuint uniform_texture_sampler_id{0};
+
+    GLuint uniform_view_position_id{0};
+    GLuint uniform_material_shininess_id{0};
+    GLuint uniform_light_direction_id{0};
+    GLuint uniform_light_ambient_id{0};
+    GLuint uniform_light_diffuse_id{0};
+    GLuint uniform_light_specular_id{0};
 };

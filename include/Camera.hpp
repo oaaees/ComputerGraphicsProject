@@ -30,6 +30,8 @@ public:
 
     glm::mat4 get_view_matrix() const noexcept;
 
+    glm::vec3 get_position() const noexcept { return position; }
+
 private:
     void update_vectors() noexcept;
 

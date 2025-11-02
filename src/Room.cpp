@@ -9,6 +9,10 @@ Room::Room(const std::filesystem::path& root_path)
     floor_texture = std::make_shared<Texture>(root_path / "textures" / "wood.png");
     floor_texture->load();
 
+    // A ceiling texture would be nice, but we can reuse the wood for now
+    ceiling_texture = std::make_shared<Texture>(root_path / "textures" / "wood.png");
+    ceiling_texture->load();
+
     wall_texture = std::make_shared<Texture>(root_path / "textures" / "brick.png");
     wall_texture->load();
 
@@ -24,6 +28,17 @@ Room::Room(const std::filesystem::path& root_path)
     };
     std::vector<unsigned int> floor_indices = { 0, 2, 1, 0, 3, 2 };
     floor_mesh = Mesh::create(floor_vertices, floor_indices);
+
+    // Ceiling
+    std::vector<GLfloat> ceiling_vertices = {
+        // Positions          // Normals            // Texture Coords
+        -10.0f,  8.0f, -10.0f,  0.0f, -1.0f, 0.0f,   0.0f, 0.0f,
+         10.0f,  8.0f, -10.0f,  0.0f, -1.0f, 0.0f,   5.0f, 0.0f,
+         10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   5.0f, 5.0f,
+        -10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   0.0f, 5.0f,
+    };
+    std::vector<unsigned int> ceiling_indices = { 0, 1, 2, 0, 2, 3 }; // Reversed winding for downward normal
+    ceiling_mesh = Mesh::create(ceiling_vertices, ceiling_indices);
 
     // Walls
     std::vector<GLfloat> wall_vertices = {
@@ -63,9 +78,18 @@ void Room::render(const std::shared_ptr<Shader>& shader)
     glm::mat4 model{1.f};
     glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
 
+    // Render floor (more shiny)
+    glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 32.0f);
     floor_texture->use();
     floor_mesh->render();
 
+    // Render ceiling (less shiny)
+    glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 8.0f);
+    ceiling_texture->use();
+    ceiling_mesh->render();
+
+    // Render walls (more matte)
+    glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 2.0f);
     wall_texture->use();
     wall_mesh->render();
 }
