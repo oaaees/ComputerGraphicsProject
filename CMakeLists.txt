@@ -18,6 +18,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(assimp REQUIRED)
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_party)
 execute_process(
@@ -36,4 +37,4 @@ target_include_directories(lib PUBLIC "${PROJECT_SOURCE_DIR}/include")
 # Set the main source to generate the executable code
 add_executable(main main.cpp)
 
-target_link_libraries(main GL GLEW glfw lib)
+target_link_libraries(main GL GLEW glfw lib assimp::assimp)

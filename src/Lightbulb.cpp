@@ -53,8 +53,9 @@ void Lightbulb::create_mesh()
     std::vector<GLfloat> padded_vertices;
     for (size_t i = 0; i < vertices.size(); i += 3) {
         padded_vertices.insert(padded_vertices.end(), {vertices[i], vertices[i+1], vertices[i+2]});
-        // Pad with 8 zeros for normal, tex coords, and tangent
-        for(int j = 0; j < 8; ++j) padded_vertices.push_back(0.0f);
+        // Pad with 5 zeros to create: normal(3) + texcoord(2)
+        // Mesh::create expects input vertices with 8 floats per-vertex (3 pos, 3 normal, 2 uv)
+        for(int j = 0; j < 5; ++j) padded_vertices.push_back(0.0f);
     }
 
     mesh = Mesh::create(padded_vertices, indices);

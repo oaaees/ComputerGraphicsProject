@@ -14,6 +14,8 @@
 #include <Room.hpp>
 #include <PointLight.hpp>
 #include <Lightbulb.hpp>
+#include <AssimpLoader.hpp>
+#include <Texture.hpp>
 
 namespace fs = std::filesystem;
 
@@ -62,6 +64,15 @@ int main()
 
     // Create the shared mesh for all lightbulbs
     Lightbulb::create_mesh();
+
+    // Create fallback textures (white albedo and neutral normal map)
+    auto fallback_albedo = std::make_shared<Texture>(255, 255, 255, 255);
+    fallback_albedo->load();
+    auto fallback_normal = std::make_shared<Texture>(128, 128, 255, 255);
+    fallback_normal->load();
+
+    // Load a simple test model (wooden_table_02_1k.gltf) using the Assimp loader
+    std::vector<AssimpLoader::Renderable> imported_models = AssimpLoader::loadModel(Data::root_path / "models" / "wooden_table_02_1k.gltf");
 
     // Create lightbulbs, which contain the point light data and the mesh
     std::vector<Lightbulb> lightbulbs;
@@ -123,6 +134,36 @@ int main()
 
         // Render the room with its material properties
         room.render(Data::shader_list[0]);
+
+        // --- Render imported model(s) (simple test) ---
+        if (!imported_models.empty()) {
+            Data::shader_list[0]->use();
+            // Ensure shader texture bindings
+            glUniform1i(Data::shader_list[0]->get_uniform_texture_sampler_id(), 0);
+            glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "normal_sampler"), 1);
+
+                // Model transform: place model on the floor
+                glm::mat4 modelBase{1.0f};
+                modelBase = glm::translate(modelBase, glm::vec3{0.0f, -1.0f, 0.0f});
+                modelBase = glm::scale(modelBase, glm::vec3{2.0f});
+
+                glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "material.shininess"), 32.0f);
+
+                for (auto &r : imported_models) {
+                    glm::mat4 modelMat = modelBase * r.transform;
+                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+                    // Bind the model's textures (or fallbacks created by the loader)
+                    if (r.albedo) r.albedo->use();
+                    else fallback_albedo->use();
+
+                    glActiveTexture(GL_TEXTURE1);
+                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id());
+                    else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+
+                    r.mesh->render();
+                }
+        }
 
         // --- Render the lightbulbs ---
         Data::shader_list[1]->use();
