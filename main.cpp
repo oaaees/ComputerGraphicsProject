@@ -13,6 +13,7 @@
 #include <Window.hpp>
 #include <Room.hpp>
 #include <PointLight.hpp>
+#include <Lightbulb.hpp>
 
 namespace fs = std::filesystem;
 
@@ -59,49 +60,21 @@ int main()
     // Create the room
     Room room(Data::root_path);
 
-    // Create point lights
-    std::vector<PointLight> point_lights;
-    point_lights.emplace_back(glm::vec3{-4.0f, 0.0f, 0.0f},  // position
-                              glm::vec3{0.1f, 0.1f, 0.1f}, glm::vec3{0.8f, 0.8f, 0.8f}, glm::vec3{0.2f, 0.2f, 0.2f}, // colors
-                              1.0f, 0.09f, 0.032f); // attenuation
-    point_lights.emplace_back(glm::vec3{4.0f, 0.0f, 0.0f},
-                              glm::vec3{0.1f, 0.1f, 0.1f}, glm::vec3{0.8f, 0.8f, 0.8f}, glm::vec3{0.2f, 0.2f, 0.2f},
-                              1.0f, 0.09f, 0.032f);
+    // Create the shared mesh for all lightbulbs
+    Lightbulb::create_mesh();
 
-    // Create a cube mesh for the lightbulbs
-    std::vector<GLfloat> lightbulb_vertices = {
-        -0.1f, -0.1f, -0.1f,
-         0.1f, -0.1f, -0.1f,
-         0.1f,  0.1f, -0.1f,
-        -0.1f,  0.1f, -0.1f,
-        -0.1f, -0.1f,  0.1f,
-         0.1f, -0.1f,  0.1f,
-         0.1f,  0.1f,  0.1f,
-        -0.1f,  0.1f,  0.1f,
-    };
-
-    std::vector<unsigned int> lightbulb_indices = {
-        0, 1, 2, 0, 2, 3, // Back
-        4, 5, 6, 4, 6, 7, // Front
-        0, 4, 7, 0, 7, 3, // Left
-        1, 5, 6, 1, 6, 2, // Right
-        3, 2, 6, 3, 6, 7, // Top
-        0, 1, 5, 0, 5, 4  // Bottom
-    };
-
-    // We need to modify the Mesh class to handle vertices without normals and texture coordinates
-    // For now, let's just pad the data. This is inefficient but will work.
-    std::vector<GLfloat> padded_lightbulb_vertices;
-    for (size_t i = 0; i < lightbulb_vertices.size(); i += 3) {
-        padded_lightbulb_vertices.push_back(lightbulb_vertices[i]);
-        padded_lightbulb_vertices.push_back(lightbulb_vertices[i+1]);
-        padded_lightbulb_vertices.push_back(lightbulb_vertices[i+2]);
-        // Pad with 5 zeros for normal and tex coords
-        for(int j = 0; j < 5; ++j) padded_lightbulb_vertices.push_back(0.0f);
-    }
-
-    auto lightbulb_mesh = Mesh::create(padded_lightbulb_vertices, lightbulb_indices);
-
+    // Create lightbulbs, which contain the point light data and the mesh
+    std::vector<Lightbulb> lightbulbs;
+    lightbulbs.emplace_back(
+        PointLight(glm::vec3{-4.0f, 7.5f, 0.0f},
+                   glm::vec3{0.05f, 0.05f, 0.05f}, glm::vec3{2.0f, 2.0f, 2.0f}, glm::vec3{0.5f, 0.5f, 0.5f},
+                   1.0f, 0.09f, 0.032f), // PointLight
+        glm::vec3{1.0f, 1.0f, 1.0f});   // Color
+    lightbulbs.emplace_back(
+        PointLight(glm::vec3{4.0f, 7.5f, 0.0f},
+                   glm::vec3{0.05f, 0.05f, 0.05f}, glm::vec3{2.0f, 2.0f, 2.0f}, glm::vec3{0.5f, 0.5f, 0.5f},
+                   1.0f, 0.09f, 0.032f), // PointLight
+        glm::vec3{1.0f, 1.0f, 1.0f});   // Color
 
     glm::mat4 projection = glm::perspective(45.f, main_window->get_aspect_ratio(), 0.1f, 100.f);
 
@@ -144,8 +117,8 @@ int main()
         glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.specular"), 0.1f, 0.1f, 0.1f);
 
         // Point lights
-        for(size_t i = 0; i < point_lights.size(); ++i) {
-            point_lights[i].use(Data::shader_list[0], i);
+        for(size_t i = 0; i < lightbulbs.size(); ++i) {
+            lightbulbs[i].use_light(Data::shader_list[0], i);
         }
 
         // Render the room with its material properties
@@ -156,14 +129,8 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(Data::shader_list[1]->get_program_id(), "projection"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(glGetUniformLocation(Data::shader_list[1]->get_program_id(), "view"), 1, GL_FALSE, glm::value_ptr(camera.get_view_matrix()));
 
-        for (const auto& light : point_lights) {
-            glm::mat4 model{1.0f};
-            // The lightbulb position is stored in the PointLight class, but we can't access it.
-            // For now, let's hardcode the positions to match.
-            model = glm::translate(model, light.get_position());
-            glUniformMatrix4fv(glGetUniformLocation(Data::shader_list[1]->get_program_id(), "model"), 1, GL_FALSE, glm::value_ptr(model));
-            glUniform3f(glGetUniformLocation(Data::shader_list[1]->get_program_id(), "lightColor"), 1.0f, 1.0f, 1.0f); // White lightbulbs
-            lightbulb_mesh->render();
+        for (const auto& bulb : lightbulbs) {
+            bulb.render(Data::shader_list[1]);
         }
 
         glUseProgram(0);
