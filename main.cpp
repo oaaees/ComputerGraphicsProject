@@ -62,10 +62,10 @@ int main()
     // Create point lights
     std::vector<PointLight> point_lights;
     point_lights.emplace_back(glm::vec3{-4.0f, 0.0f, 0.0f},  // position
-                              glm::vec3{0.1f, 0.1f, 0.1f}, glm::vec3{0.8f, 0.8f, 0.8f}, glm::vec3{1.0f, 1.0f, 1.0f}, // colors
+                              glm::vec3{0.1f, 0.1f, 0.1f}, glm::vec3{0.8f, 0.8f, 0.8f}, glm::vec3{0.2f, 0.2f, 0.2f}, // colors
                               1.0f, 0.09f, 0.032f); // attenuation
     point_lights.emplace_back(glm::vec3{4.0f, 0.0f, 0.0f},
-                              glm::vec3{0.1f, 0.1f, 0.1f}, glm::vec3{0.8f, 0.8f, 0.8f}, glm::vec3{1.0f, 1.0f, 1.0f},
+                              glm::vec3{0.1f, 0.1f, 0.1f}, glm::vec3{0.8f, 0.8f, 0.8f}, glm::vec3{0.2f, 0.2f, 0.2f},
                               1.0f, 0.09f, 0.032f);
 
     // Create a cube mesh for the lightbulbs
@@ -127,6 +127,9 @@ int main()
         // --- Render the room ---
         Data::shader_list[0]->use();
 
+        glUniform1i(Data::shader_list[0]->get_uniform_texture_sampler_id(), 0);
+        glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "normal_sampler"), 1);
+
         // Set projection and view matrices
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_projection_id(), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_view_id(), 1, GL_FALSE, glm::value_ptr(camera.get_view_matrix()));
@@ -137,8 +140,8 @@ int main()
         // --- Set Light Uniforms ---
         // Directional light
         glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.direction"), -0.2f, -1.0f, -0.3f);
-        glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.diffuse"), 0.4f, 0.4f, 0.4f); // Dimmed a bit
-        glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.specular"), 0.5f, 0.5f, 0.5f);
+        glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.diffuse"), 0.5f, 0.5f, 0.5f);
+        glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.specular"), 0.1f, 0.1f, 0.1f);
 
         // Point lights
         for(size_t i = 0; i < point_lights.size(); ++i) {

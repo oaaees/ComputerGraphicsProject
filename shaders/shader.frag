@@ -1,12 +1,13 @@
 #version 410
 
 in vec2 TexCoord;
-in vec3 Normal;
 in vec3 FragPos;
+in mat3 TBN;
 
 out vec4 FragColor;
 
 uniform sampler2D texture_sampler;
+uniform sampler2D normal_sampler;
 uniform vec3 viewPosition;
 
 // A simple material structure
@@ -43,7 +44,12 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 
 void main()
 {
-    vec3 norm = normalize(Normal);
+    // Obtain normal from normal map. It's in tangent space, so transform to world space.
+    // The range [0,1] is mapped to [-1,1].
+    vec3 norm = texture(normal_sampler, TexCoord).rgb;
+    norm = normalize(norm * 2.0 - 1.0);
+    norm = normalize(TBN * norm);
+
     vec3 viewDir = normalize(viewPosition - FragPos);
 
     // Phase 1: Directional lighting

@@ -21,6 +21,8 @@ public:
 
     void use() const noexcept;
 
+    GLuint get_id() const noexcept { return id; }
+
 private:
     void clear() noexcept;
 

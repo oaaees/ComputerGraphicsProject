@@ -6,15 +6,17 @@
 Room::Room(const std::filesystem::path& root_path)
 {
     // Load textures
-    floor_texture = std::make_shared<Texture>(root_path / "textures" / "wood.png");
+    floor_texture = std::make_shared<Texture>(root_path / "textures" / "floor_albedo.jpg");
     floor_texture->load();
 
-    // A ceiling texture would be nice, but we can reuse the wood for now
-    ceiling_texture = std::make_shared<Texture>(root_path / "textures" / "wood.png");
-    ceiling_texture->load();
+    floor_normal_texture = std::make_shared<Texture>(root_path / "textures" / "floor_normal.png");
+    floor_normal_texture->load();
 
-    wall_texture = std::make_shared<Texture>(root_path / "textures" / "brick.png");
+    wall_texture = std::make_shared<Texture>(root_path / "textures" / "wall_albedo.jpg");
     wall_texture->load();
+
+    wall_normal_texture = std::make_shared<Texture>(root_path / "textures" / "wall_normal.png");
+    wall_normal_texture->load();
 
     // --- Room Geometry ---
 
@@ -33,9 +35,9 @@ Room::Room(const std::filesystem::path& root_path)
     std::vector<GLfloat> ceiling_vertices = {
         // Positions          // Normals            // Texture Coords
         -10.0f,  8.0f, -10.0f,  0.0f, -1.0f, 0.0f,   0.0f, 0.0f,
-         10.0f,  8.0f, -10.0f,  0.0f, -1.0f, 0.0f,   5.0f, 0.0f,
-         10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   5.0f, 5.0f,
-        -10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   0.0f, 5.0f,
+         10.0f,  8.0f, -10.0f,  0.0f, -1.0f, 0.0f,   2.0f, 0.0f,
+         10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   2.0f, 1.0f,
+        -10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   0.0f, 1.0f,
     };
     std::vector<unsigned int> ceiling_indices = { 0, 1, 2, 0, 2, 3 }; // Reversed winding for downward normal
     ceiling_mesh = Mesh::create(ceiling_vertices, ceiling_indices);
@@ -45,24 +47,24 @@ Room::Room(const std::filesystem::path& root_path)
         // Positions          // Normals           // Texture Coords
         // Back wall
         -10.0f, -2.0f, -10.0f,  0.0f, 0.0f, 1.0f,   0.0f, 0.0f,
-         10.0f, -2.0f, -10.0f,  0.0f, 0.0f, 1.0f,   5.0f, 0.0f,
-         10.0f,  8.0f, -10.0f,  0.0f, 0.0f, 1.0f,   5.0f, 5.0f,
-        -10.0f,  8.0f, -10.0f,  0.0f, 0.0f, 1.0f,   0.0f, 5.0f,
+         10.0f, -2.0f, -10.0f,  0.0f, 0.0f, 1.0f,   2.0f, 0.0f,
+         10.0f,  8.0f, -10.0f,  0.0f, 0.0f, 1.0f,   2.0f, 1.0f,
+        -10.0f,  8.0f, -10.0f,  0.0f, 0.0f, 1.0f,   0.0f, 1.0f,
         // Front wall
-        -10.0f, -2.0f, 10.0f,   0.0f, 0.0f, -1.0f,  5.0f, 0.0f,
+        -10.0f, -2.0f, 10.0f,   0.0f, 0.0f, -1.0f,  2.0f, 0.0f,
          10.0f, -2.0f, 10.0f,   0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
-         10.0f,  8.0f, 10.0f,   0.0f, 0.0f, -1.0f,  0.0f, 5.0f,
-        -10.0f,  8.0f, 10.0f,   0.0f, 0.0f, -1.0f,  5.0f, 5.0f,
+         10.0f,  8.0f, 10.0f,   0.0f, 0.0f, -1.0f,  0.0f, 1.0f,
+        -10.0f,  8.0f, 10.0f,   0.0f, 0.0f, -1.0f,  2.0f, 1.0f,
         // Left wall
-        -10.0f, -2.0f,  10.0f,  1.0f, 0.0f, 0.0f,   5.0f, 0.0f,
+        -10.0f, -2.0f,  10.0f,  1.0f, 0.0f, 0.0f,   2.0f, 0.0f,
         -10.0f, -2.0f, -10.0f,  1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-        -10.0f,  8.0f, -10.0f,  1.0f, 0.0f, 0.0f,   0.0f, 5.0f,
-        -10.0f,  8.0f,  10.0f,  1.0f, 0.0f, 0.0f,   5.0f, 5.0f,
+        -10.0f,  8.0f, -10.0f,  1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
+        -10.0f,  8.0f,  10.0f,  1.0f, 0.0f, 0.0f,   2.0f, 1.0f,
         // Right wall
-         10.0f, -2.0f, -10.0f, -1.0f, 0.0f, 0.0f,   5.0f, 0.0f,
+         10.0f, -2.0f, -10.0f, -1.0f, 0.0f, 0.0f,   2.0f, 0.0f,
          10.0f, -2.0f,  10.0f, -1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-         10.0f,  8.0f,  10.0f, -1.0f, 0.0f, 0.0f,   0.0f, 5.0f,
-         10.0f,  8.0f, -10.0f, -1.0f, 0.0f, 0.0f,   5.0f, 5.0f,
+         10.0f,  8.0f,  10.0f, -1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
+         10.0f,  8.0f, -10.0f, -1.0f, 0.0f, 0.0f,   2.0f, 1.0f,
     };
     std::vector<unsigned int> wall_indices = {
         0, 1, 2, 0, 2, 3,       // Back
@@ -80,16 +82,22 @@ void Room::render(const std::shared_ptr<Shader>& shader)
 
     // Render floor (more shiny)
     glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 32.0f);
-    floor_texture->use();
+    floor_texture->use(); // Binds to GL_TEXTURE0
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, floor_normal_texture->get_id());
     floor_mesh->render();
 
     // Render ceiling (less shiny)
-    glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 8.0f);
-    ceiling_texture->use();
+    glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 16.0f);
+    wall_texture->use(); // Use the wall's albedo texture
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, wall_normal_texture->get_id()); // Use the wall's normal map
     ceiling_mesh->render();
 
-    // Render walls (more matte)
-    glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 2.0f);
-    wall_texture->use();
+    // Render walls (matte)
+    glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 64.0f);
+    wall_texture->use(); // Binds to GL_TEXTURE0
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, wall_normal_texture->get_id());
     wall_mesh->render();
 }
