@@ -16,6 +16,11 @@ namespace AssimpLoader
         std::shared_ptr<Texture> albedo; // may be nullptr
         std::shared_ptr<Texture> normal; // may be nullptr
         glm::mat4 transform{1.0f};
+        // Original mesh bounds in source space (before we apply the transform
+        // that aligns minY to 0). These are useful for stacking objects on
+        // top of one another (e.g., place a prop on top of a table).
+        glm::vec3 src_min{0.0f};
+        glm::vec3 src_max{0.0f};
     };
 
     // Load a model file (e.g., .gltf) and return one or more Renderable objects

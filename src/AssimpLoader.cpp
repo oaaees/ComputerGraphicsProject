@@ -40,12 +40,18 @@ namespace AssimpLoader
             vertices.reserve(aMesh->mNumVertices * 8);
 
             // Positions, normals, texcoords (uv)
-            float minY = std::numeric_limits<float>::infinity();
+            glm::vec3 minV{ std::numeric_limits<float>::infinity() };
+            glm::vec3 maxV{ -std::numeric_limits<float>::infinity() };
             for (unsigned int i = 0; i < aMesh->mNumVertices; ++i)
             {
                 // position
                 aiVector3D pos = aMesh->mVertices[i];
-                if (pos.y < minY) minY = pos.y;
+                if (pos.x < minV.x) minV.x = pos.x;
+                if (pos.y < minV.y) minV.y = pos.y;
+                if (pos.z < minV.z) minV.z = pos.z;
+                if (pos.x > maxV.x) maxV.x = pos.x;
+                if (pos.y > maxV.y) maxV.y = pos.y;
+                if (pos.z > maxV.z) maxV.z = pos.z;
                 vertices.push_back(pos.x);
                 vertices.push_back(pos.y);
                 vertices.push_back(pos.z);
@@ -150,7 +156,9 @@ namespace AssimpLoader
             // Translate the mesh so its minimum Y is at 0.0 in local space. The scene
             // rendering applies the room-floor translation afterwards, so this makes
             // it easier to place objects on the floor.
-            r.transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -minY, 0.0f));
+            r.transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -minV.y, 0.0f));
+            r.src_min = minV;
+            r.src_max = maxV;
 
             out.push_back(std::move(r));
         }

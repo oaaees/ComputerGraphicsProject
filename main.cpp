@@ -76,6 +76,19 @@ int main()
     // Load a simple test model (wooden_table_02_1k.gltf) using the Assimp loader
     std::vector<AssimpLoader::Renderable> imported_models = AssimpLoader::loadModel(Data::root_path / "models" / "wooden_table_02_1k.gltf");
 
+    // Load props (one model per table). Expect these files to exist in models/
+    std::vector<std::vector<AssimpLoader::Renderable>> prop_models;
+    std::vector<std::string> prop_files = {
+        "lubricant_spray_1k.gltf",
+        "marble_bust_01_1k.gltf",
+        "rubber_duck_toy_1k.gltf",
+        "street_rat_1k.gltf"
+    };
+    for (auto &pf : prop_files) {
+        auto group = AssimpLoader::loadModel(Data::root_path / "models" / pf);
+        prop_models.push_back(std::move(group));
+    }
+
     // Create a single lightbulb in the middle of the ceiling (we'll shadow this one)
     std::vector<Lightbulb> lightbulbs;
     PointLight ceilingLight(glm::vec3{0.0f, 7.5f, 0.0f},
@@ -145,7 +158,7 @@ int main()
                 // Imported models
                 if (!imported_models.empty()) {
                     // Render the same four instances used in the main pass so shadows
-                    // are generated for each table instance.
+                        // are generated for each table instance.
                     const float modelScale = 2.0f;
                     const float floorY = -2.0f;
                     std::vector<glm::vec3> positions = {
@@ -170,6 +183,46 @@ int main()
                             modelMat = modelMat * r.transform;
                             glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
                             r.mesh->render();
+                        }
+                    }
+
+                    // Also render the props into the depth cubemap so they cast shadows.
+                    // Compute table height from imported_models (max of src heights)
+                    float tableHeight = 0.0f;
+                    for (auto &r : imported_models) {
+                        tableHeight = std::max(tableHeight, r.src_max.y - r.src_min.y);
+                    }
+                    tableHeight *= modelScale;
+
+                    // Target tabletop footprint (meters) used to scale props to a reasonable size.
+                    // per-prop target footprint (meters): [spray, bust, duck, rat]
+                    std::vector<float> perPropFootprint = { 0.15f, 0.6f, 0.8f, 1.5f };
+                    for (size_t i = 0; i < prop_models.size() && i < positions.size(); ++i) {
+                        auto &group = prop_models[i];
+                        glm::vec3 basePos = positions[i];
+                        // place prop bottom on the table top
+                        basePos.y = floorY + tableHeight + 0.02f; // small epsilon above table
+                        for (auto &pr : group) {
+                            // compute source bbox and center
+
+                            glm::vec3 srcSize = pr.src_max - pr.src_min;
+                            glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
+                            // use X and Z for footprint; allow per-prop footprint tuning
+                            float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
+                            float target = (i < perPropFootprint.size()) ? perPropFootprint[i] : 0.6f;
+                            float scaleUniform = target / footprintDim;
+                            scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
+
+                            // Build model matrix: translate to table top, scale, apply loader transform and center horizontally
+                            glm::mat4 modelMat{1.0f};
+                            modelMat = glm::translate(modelMat, basePos);
+                            modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
+                            // apply loader's transform (aligns minY to 0). Center only X/Z (avoid changing Y placement due to centering)
+                            glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
+                            modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
+
+                            glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                            pr.mesh->render();
                         }
                     }
                 }
@@ -269,6 +322,46 @@ int main()
                         else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
 
                         r.mesh->render();
+                    }
+                }
+
+                // Render props (one group per table) on top of the tables in the main pass
+                // Compute table height from imported_models (max of src heights)
+                float tableHeight = 0.0f;
+                for (auto &r : imported_models) {
+                    tableHeight = std::max(tableHeight, r.src_max.y - r.src_min.y);
+                }
+                tableHeight *= modelScale;
+
+                const float targetFootprint = 0.6f;
+                // per-prop footprint matching used in the main pass as well
+                std::vector<float> perPropFootprintMain = { 0.15f, 0.6f, 0.8f, 1.5f };
+                for (size_t i = 0; i < prop_models.size() && i < positions.size(); ++i) {
+                    auto &group = prop_models[i];
+                    glm::vec3 basePos = positions[i];
+                    basePos.y = floorY + tableHeight + 0.02f; // small epsilon above table
+                    for (auto &pr : group) {
+
+                        glm::vec3 srcSize = pr.src_max - pr.src_min;
+                        glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
+                        float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
+                        float target = (i < perPropFootprintMain.size()) ? perPropFootprintMain[i] : targetFootprint;
+                        float scaleUniform = target / footprintDim;
+                        scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
+
+                        glm::mat4 modelMat{1.0f};
+                        modelMat = glm::translate(modelMat, basePos);
+                        modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
+                        glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
+                        modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
+
+                        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+                        if (pr.albedo) pr.albedo->use(); else fallback_albedo->use();
+                        glActiveTexture(GL_TEXTURE1);
+                        if (pr.normal) glBindTexture(GL_TEXTURE_2D, pr.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+
+                        pr.mesh->render();
                     }
                 }
         }
