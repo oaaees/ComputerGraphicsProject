@@ -37,11 +37,18 @@ struct PointLight {
     vec3 specular;
 };
 
-#define NR_POINT_LIGHTS 2
+#define NR_POINT_LIGHTS 1
 uniform PointLight pointLights[NR_POINT_LIGHTS];
+
+// Shadow cubemap for the (single) point light
+uniform samplerCube shadowMap;
+uniform float far_plane;
+uniform float shadowRadius; // world-space sampling radius for PCF
+uniform bool enableShadows;
 
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir);
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
+float CalcPointShadow(PointLight light, vec3 normal, vec3 fragPos);
 
 void main()
 {
@@ -98,5 +105,50 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     ambient *= attenuation;
     diffuse *= attenuation;
     specular *= attenuation;
+    // Shadow calculation for point light (cubemap)
+    float shadow = CalcPointShadow(light, normal, fragPos);
+    // Reduce diffuse and specular when in shadow
+    diffuse *= (1.0 - shadow);
+    specular *= (1.0 - shadow);
     return (ambient + diffuse + specular);
+}
+
+float CalcPointShadow(PointLight light, vec3 normal, vec3 fragPos)
+{
+    vec3 fragToLight = fragPos - light.position;
+    float currentDepth = length(fragToLight);
+    // Bias to avoid shadow acne (normal/slope based)
+    // slope-scale + constant bias (better across grazing angles)
+    float normalDot = dot(normal, normalize(light.position - fragPos));
+    float bias = max(0.02 * (1.0 - normalDot), 0.001) + 0.0005;
+
+    // Poisson-disk-like PCF with per-fragment rotation to reduce banding/ghosting
+    const int SAMPLE_COUNT = 12;
+    const vec3 poissonDisk[SAMPLE_COUNT] = vec3[](
+        vec3( 0.5381,  0.1856,  0.1234), vec3( 0.1379,  0.2486, -0.1444), vec3( 0.3371, -0.5679,  0.3456),
+        vec3(-0.7255,  0.2451,  0.5678), vec3(-0.1839, -0.3887, -0.2444), vec3( 0.1234,  0.4567, -0.3333),
+        vec3( 0.6543, -0.2311,  0.1111), vec3(-0.4444,  0.3333, -0.2222), vec3( 0.2222, -0.1111,  0.4444),
+        vec3(-0.1111,  0.7777, -0.3333), vec3( 0.8888, -0.4444,  0.2222), vec3(-0.6666, -0.2222,  0.5555)
+    );
+
+    if (!enableShadows) return 0.0;
+    float occluded = 0.0;
+    float radius = shadowRadius * (currentDepth / far_plane);
+
+    // rotation angle per-fragment (based on FragPos hash)
+    float rnd = fract(sin(dot(fragPos.xyz , vec3(12.9898,78.233,45.164))) * 43758.5453);
+    float angle = rnd * 6.28318530718; // 2*pi
+    vec3 axis = normalize(fragToLight);
+
+    for (int i = 0; i < SAMPLE_COUNT; ++i) {
+        // rotate sample vector around the fragToLight axis using Rodrigues' rotation formula
+        vec3 v = poissonDisk[i];
+        vec3 v_rot = v * cos(angle) + cross(axis, v) * sin(angle) + axis * dot(axis, v) * (1.0 - cos(angle));
+        vec3 dir = normalize(fragToLight + v_rot * radius);
+        float sampleDepth = texture(shadowMap, dir).r * far_plane;
+        if (currentDepth - bias > sampleDepth) occluded += 1.0;
+    }
+
+    float shadow = occluded / float(SAMPLE_COUNT);
+    return shadow;
 }

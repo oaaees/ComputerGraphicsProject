@@ -9,6 +9,7 @@
 #include <BSlogger.hpp>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <filesystem>
 
@@ -39,10 +40,12 @@ namespace AssimpLoader
             vertices.reserve(aMesh->mNumVertices * 8);
 
             // Positions, normals, texcoords (uv)
+            float minY = std::numeric_limits<float>::infinity();
             for (unsigned int i = 0; i < aMesh->mNumVertices; ++i)
             {
                 // position
                 aiVector3D pos = aMesh->mVertices[i];
+                if (pos.y < minY) minY = pos.y;
                 vertices.push_back(pos.x);
                 vertices.push_back(pos.y);
                 vertices.push_back(pos.z);
@@ -144,7 +147,10 @@ namespace AssimpLoader
             r.mesh = mesh;
             r.albedo = albedo_tex;
             r.normal = normal_tex;
-            r.transform = glm::mat4(1.0f);
+            // Translate the mesh so its minimum Y is at 0.0 in local space. The scene
+            // rendering applies the room-floor translation afterwards, so this makes
+            // it easier to place objects on the floor.
+            r.transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -minY, 0.0f));
 
             out.push_back(std::move(r));
         }

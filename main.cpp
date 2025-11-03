@@ -16,6 +16,8 @@
 #include <Lightbulb.hpp>
 #include <AssimpLoader.hpp>
 #include <Texture.hpp>
+#include <ShadowCubemap.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 namespace fs = std::filesystem;
 
@@ -74,18 +76,28 @@ int main()
     // Load a simple test model (wooden_table_02_1k.gltf) using the Assimp loader
     std::vector<AssimpLoader::Renderable> imported_models = AssimpLoader::loadModel(Data::root_path / "models" / "wooden_table_02_1k.gltf");
 
-    // Create lightbulbs, which contain the point light data and the mesh
+    // Create a single lightbulb in the middle of the ceiling (we'll shadow this one)
     std::vector<Lightbulb> lightbulbs;
-    lightbulbs.emplace_back(
-        PointLight(glm::vec3{-4.0f, 7.5f, 0.0f},
-                   glm::vec3{0.05f, 0.05f, 0.05f}, glm::vec3{2.0f, 2.0f, 2.0f}, glm::vec3{0.5f, 0.5f, 0.5f},
-                   1.0f, 0.09f, 0.032f), // PointLight
-        glm::vec3{1.0f, 1.0f, 1.0f});   // Color
-    lightbulbs.emplace_back(
-        PointLight(glm::vec3{4.0f, 7.5f, 0.0f},
-                   glm::vec3{0.05f, 0.05f, 0.05f}, glm::vec3{2.0f, 2.0f, 2.0f}, glm::vec3{0.5f, 0.5f, 0.5f},
-                   1.0f, 0.09f, 0.032f), // PointLight
-        glm::vec3{1.0f, 1.0f, 1.0f});   // Color
+    PointLight ceilingLight(glm::vec3{0.0f, 7.5f, 0.0f},
+                            glm::vec3{0.05f, 0.05f, 0.05f}, glm::vec3{2.0f, 2.0f, 2.0f}, glm::vec3{0.5f, 0.5f, 0.5f},
+                            1.0f, 0.09f, 0.032f);
+    lightbulbs.emplace_back(ceilingLight, glm::vec3{1.0f, 1.0f, 1.0f});
+
+    // Shadow cubemap for the ceiling bulb (resolution, far plane tuned to scene)
+    unsigned int SHADOW_SIZE = 2048;
+    const float SHADOW_FAR = 25.0f;
+    // Ensure no textures are bound to any unit (prevents sampler validation warnings)
+    for (int i = 0; i < 8; ++i) {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    }
+
+    auto depthShader = Shader::create_from_files(Data::root_path / "shaders" / "depth_cube.vert", Data::root_path / "shaders" / "depth_cube.frag");
+    ShadowCubemap shadowCubemap(SHADOW_SIZE, SHADOW_FAR);
+
+    // Runtime shadow controls were removed (use fixed parameters)
+    const bool enableShadows = true;
 
     glm::mat4 projection = glm::perspective(45.f, main_window->get_aspect_ratio(), 0.1f, 100.f);
 
@@ -104,15 +116,87 @@ int main()
         camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
         camera.update(dt);
 
+        // (Removed runtime shadow key handlers and noisy console prints)
+
+        // --- Shadow pass for the single point light (skip if disabled) ---
+        if (enableShadows) {
+            glm::vec3 light_pos = ceilingLight.get_position();
+            depthShader->use();
+            float near_plane = 0.1f;
+            glm::mat4 shadow_proj = glm::perspective(glm::radians(90.0f), 1.0f, near_plane, SHADOW_FAR);
+            auto shadow_views = shadowCubemap.get_shadow_views(light_pos);
+
+            // Render to each face
+            glViewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
+            glBindFramebuffer(GL_FRAMEBUFFER, shadowCubemap.get_fbo());
+            for (unsigned int face = 0; face < 6; ++face) {
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, shadowCubemap.get_depth_cubemap_id(), 0);
+                glClear(GL_DEPTH_BUFFER_BIT);
+
+                // Set projection and view for this face
+                glUniformMatrix4fv(depthShader->get_uniform_projection_id(), 1, GL_FALSE, glm::value_ptr(shadow_proj));
+                glUniformMatrix4fv(depthShader->get_uniform_view_id(), 1, GL_FALSE, glm::value_ptr(shadow_views[face]));
+                glUniform3fv(glGetUniformLocation(depthShader->get_program_id(), "lightPos"), 1, glm::value_ptr(light_pos));
+                glUniform1f(glGetUniformLocation(depthShader->get_program_id(), "far_plane"), SHADOW_FAR);
+
+                // Render scene geometry for depth
+                // Room
+                room.render(depthShader);
+                // Imported models
+                if (!imported_models.empty()) {
+                    // Render the same four instances used in the main pass so shadows
+                    // are generated for each table instance.
+                    const float modelScale = 2.0f;
+                    const float floorY = -2.0f;
+                    std::vector<glm::vec3> positions = {
+                        glm::vec3(0.0f, floorY,  6.0f),
+                        glm::vec3(0.0f, floorY, -6.0f),
+                        glm::vec3( 6.0f, floorY, 0.0f),
+                        glm::vec3(-6.0f, floorY, 0.0f)
+                    };
+                    std::vector<float> rotations = {
+                        0.0f,
+                        glm::pi<float>(),
+                        glm::radians(-90.0f),
+                        glm::radians(90.0f)
+                    };
+
+                    for (auto &r : imported_models) {
+                        for (size_t i = 0; i < positions.size(); ++i) {
+                            glm::mat4 modelMat{1.0f};
+                            modelMat = glm::translate(modelMat, positions[i]);
+                            modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                            modelMat = glm::scale(modelMat, glm::vec3(modelScale));
+                            modelMat = modelMat * r.transform;
+                            glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                            r.mesh->render();
+                        }
+                    }
+                }
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            // Restore viewport to window
+            glViewport(0, 0, main_window->get_buffer_width(), main_window->get_buffer_height());
+        }
+
         // Clear the window
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // --- Render the room ---
-        Data::shader_list[0]->use();
+    // --- Render the room ---
+    Data::shader_list[0]->use();
 
-        glUniform1i(Data::shader_list[0]->get_uniform_texture_sampler_id(), 0);
-        glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "normal_sampler"), 1);
+    glUniform1i(Data::shader_list[0]->get_uniform_texture_sampler_id(), 0);
+    glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "normal_sampler"), 1);
+    // Bind shadow cubemap to texture unit 3 and pass far plane
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, shadowCubemap.get_depth_cubemap_id());
+    glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "shadowMap"), 3);
+    // Inform shader whether shadows are enabled
+    glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "enableShadows"), enableShadows ? 1 : 0);
+    glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "far_plane"), SHADOW_FAR);
+    // PCF sampling radius (world units). Adjust to taste: larger -> softer shadows
+    glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "shadowRadius"), 0.12f);
 
         // Set projection and view matrices
         glUniformMatrix4fv(Data::shader_list[0]->get_uniform_projection_id(), 1, GL_FALSE, glm::value_ptr(projection));
@@ -142,26 +226,50 @@ int main()
             glUniform1i(Data::shader_list[0]->get_uniform_texture_sampler_id(), 0);
             glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "normal_sampler"), 1);
 
-                // Model transform: place model on the floor
-                glm::mat4 modelBase{1.0f};
-                modelBase = glm::translate(modelBase, glm::vec3{0.0f, -1.0f, 0.0f});
-                modelBase = glm::scale(modelBase, glm::vec3{2.0f});
-
+                // Render multiple instances of the imported model (4 tables, one near each wall)
                 glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "material.shininess"), 32.0f);
 
+                // Base transform: scale and move the model to sit on the room floor at y = -2.0
+                // Note: r.transform already translates mesh so its local min Y == 0.0
+                const float modelScale = 2.0f;
+                const float floorY = -2.0f;
+
+                // Positions for four tables (centered, near each wall)
+                std::vector<glm::vec3> positions = {
+                    glm::vec3(0.0f, floorY,  6.0f), // front (towards +Z)
+                    glm::vec3(0.0f, floorY, -6.0f), // back (towards -Z)
+                    glm::vec3( 6.0f, floorY, 0.0f), // right (towards +X)
+                    glm::vec3(-6.0f, floorY, 0.0f)  // left (towards -X)
+                };
+
+                std::vector<float> rotations = {
+                    0.0f,               // front: no rotation
+                    glm::pi<float>(),   // back: 180 degrees
+                    glm::radians(-90.0f), // right: rotate -90 around Y
+                    glm::radians(90.0f)  // left: rotate 90 around Y
+                };
+
                 for (auto &r : imported_models) {
-                    glm::mat4 modelMat = modelBase * r.transform;
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                    for (size_t i = 0; i < positions.size(); ++i) {
+                        glm::mat4 modelMat{1.0f};
+                        modelMat = glm::translate(modelMat, positions[i]);
+                        modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                        modelMat = glm::scale(modelMat, glm::vec3(modelScale));
+                        // apply the loader's local transform (which aligned mesh bottom to 0)
+                        modelMat = modelMat * r.transform;
 
-                    // Bind the model's textures (or fallbacks created by the loader)
-                    if (r.albedo) r.albedo->use();
-                    else fallback_albedo->use();
+                        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
 
-                    glActiveTexture(GL_TEXTURE1);
-                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id());
-                    else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                        // Bind the model's textures (or fallbacks created by the loader)
+                        if (r.albedo) r.albedo->use();
+                        else fallback_albedo->use();
 
-                    r.mesh->render();
+                        glActiveTexture(GL_TEXTURE1);
+                        if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id());
+                        else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+
+                        r.mesh->render();
+                    }
                 }
         }
 
@@ -175,6 +283,8 @@ int main()
         }
 
         glUseProgram(0);
+
+        
 
         main_window->swap_buffers();
     }
