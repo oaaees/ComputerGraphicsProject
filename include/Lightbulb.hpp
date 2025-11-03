@@ -17,6 +17,7 @@ public:
 
     void render(const std::shared_ptr<Shader>& shader) const;
     void use_light(const std::shared_ptr<Shader>& shader, GLuint light_index) const;
+    void set_position(const glm::vec3& p);
 
     static void create_mesh();
 

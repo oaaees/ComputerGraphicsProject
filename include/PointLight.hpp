@@ -21,6 +21,7 @@ public:
     void use(const std::shared_ptr<Shader>& shader, GLuint light_index) const noexcept;
 
     glm::vec3 get_position() const noexcept { return position; }
+    void set_position(const glm::vec3& p) noexcept { position = p; }
 
 private:
     glm::vec3 position;

@@ -25,6 +25,11 @@ void Lightbulb::use_light(const std::shared_ptr<Shader>& shader, GLuint light_in
     point_light.use(shader, light_index);
 }
 
+void Lightbulb::set_position(const glm::vec3& p)
+{
+    point_light.set_position(p);
+}
+
 void Lightbulb::create_mesh()
 {
     std::vector<GLfloat> vertices = {

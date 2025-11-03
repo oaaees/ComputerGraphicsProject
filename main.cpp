@@ -129,6 +129,27 @@ int main()
         camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
         camera.update(dt);
 
+        // Runtime: move the ceiling light with arrow keys and page up/down
+        const auto& keys = main_window->get_keys();
+        glm::vec3 lp = ceilingLight.get_position();
+        const float lightSpeed = 3.0f; // units per second
+        if (keys[GLFW_KEY_UP]) lp.z -= lightSpeed * dt;
+        if (keys[GLFW_KEY_DOWN]) lp.z += lightSpeed * dt;
+        if (keys[GLFW_KEY_LEFT]) lp.x -= lightSpeed * dt;
+        if (keys[GLFW_KEY_RIGHT]) lp.x += lightSpeed * dt;
+    // Use ',' and '.' to move light up/down: ',' lowers, '.' raises
+    if (keys[GLFW_KEY_PERIOD]) lp.y += lightSpeed * dt;
+    if (keys[GLFW_KEY_COMMA]) lp.y -= lightSpeed * dt;
+        // commit new position if changed
+        static glm::vec3 prevLp = lp;
+        if (lp != prevLp) {
+            ceilingLight.set_position(lp);
+            // update bulb visual (we only have one bulb)
+            if (!lightbulbs.empty()) lightbulbs[0].set_position(lp);
+            prevLp = lp;
+            std::cout << "light position = (" << lp.x << ", " << lp.y << ", " << lp.z << ")\n";
+        }
+
         // (Removed runtime shadow key handlers and noisy console prints)
 
         // --- Shadow pass for the single point light (skip if disabled) ---
