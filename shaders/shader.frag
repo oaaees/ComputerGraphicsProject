@@ -117,10 +117,13 @@ float CalcPointShadow(PointLight light, vec3 normal, vec3 fragPos)
 {
     vec3 fragToLight = fragPos - light.position;
     float currentDepth = length(fragToLight);
-    // Bias to avoid shadow acne (normal/slope based)
-    // slope-scale + constant bias (better across grazing angles)
+    // Bias to avoid shadow acne (slope-scale + constant bias)
+    // Increase slope-scale slightly and clamp so we avoid small acne but don't detach shadows.
     float normalDot = dot(normal, normalize(light.position - fragPos));
-    float bias = max(0.02 * (1.0 - normalDot), 0.001) + 0.0005;
+    float bias_const = 0.005; // base constant bias
+    float slopeScale = 0.08;  // slope-scale multiplier (was effectively ~0.02 before)
+    float bias = max(slopeScale * (1.0 - normalDot), bias_const);
+    bias = clamp(bias, 0.001, 0.2);
 
     // Poisson-disk-like PCF with per-fragment rotation to reduce banding/ghosting
     const int SAMPLE_COUNT = 12;
@@ -145,8 +148,9 @@ float CalcPointShadow(PointLight light, vec3 normal, vec3 fragPos)
         vec3 v = poissonDisk[i];
         vec3 v_rot = v * cos(angle) + cross(axis, v) * sin(angle) + axis * dot(axis, v) * (1.0 - cos(angle));
         vec3 dir = normalize(fragToLight + v_rot * radius);
-        float sampleDepth = texture(shadowMap, dir).r * far_plane;
-        if (currentDepth - bias > sampleDepth) occluded += 1.0;
+    float sampleDepth = texture(shadowMap, dir).r * far_plane;
+    // Add a tiny epsilon to sampled depth to further reduce precision-induced acne
+    if (currentDepth - bias > sampleDepth + 0.0005) occluded += 1.0;
     }
 
     float shadow = occluded / float(SAMPLE_COUNT);
