@@ -47,8 +47,8 @@ void create_shaders_program() noexcept
 int main()
 {
     // Window dimensions
-    constexpr GLint WIDTH = 800;
-    constexpr GLint HEIGHT = 600;
+    constexpr GLint WIDTH = 1200;
+    constexpr GLint HEIGHT = 800;
 
     auto main_window = Window::create(WIDTH, HEIGHT, "The Room");
 
