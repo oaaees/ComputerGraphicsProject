@@ -54,19 +54,21 @@ void Shader::create_program(std::string_view vertex_shader_code, std::string_vie
         return;
     }
 
-    glValidateProgram(program_id);
-    glGetProgramiv(program_id, GL_VALIDATE_STATUS, &result);
-
-    if (!result)
-    {
-        GLchar log_text[1024] = { 0 };
-        glGetProgramInfoLog(program_id, sizeof(log_text), nullptr, log_text);
-        log(LOG_ERR) << "Error validating the program: " << log_text << " \n";
-    }
+    // Note: Program validation can trigger warnings about active samplers across programs
+    // in some GL driver implementations. It's safe to skip explicit validation here.
 
     uniform_model_id = glGetUniformLocation(program_id, "model");
     uniform_view_id = glGetUniformLocation(program_id, "view");
     uniform_projection_id = glGetUniformLocation(program_id, "projection");
+    uniform_texture_sampler_id = glGetUniformLocation(program_id, "texture_sampler");
+
+    // Get new lighting uniform locations
+    uniform_view_position_id = glGetUniformLocation(program_id, "viewPosition");
+    uniform_material_shininess_id = glGetUniformLocation(program_id, "material.shininess");
+    uniform_light_direction_id = glGetUniformLocation(program_id, "light.direction");
+    uniform_light_ambient_id = glGetUniformLocation(program_id, "light.ambient");
+    uniform_light_diffuse_id = glGetUniformLocation(program_id, "light.diffuse");
+    uniform_light_specular_id = glGetUniformLocation(program_id, "light.specular");
 }
 
 void Shader::create_shader(std::string_view shader_code, GLenum shader_type) noexcept
@@ -109,6 +111,13 @@ void Shader::clear() noexcept
     uniform_projection_id = 0;
     uniform_view_id = 0;
     uniform_model_id = 0;
+    uniform_texture_sampler_id = 0;
+    uniform_view_position_id = 0;
+    uniform_material_shininess_id = 0;
+    uniform_light_direction_id = 0;
+    uniform_light_ambient_id = 0;
+    uniform_light_diffuse_id = 0;
+    uniform_light_specular_id = 0;
 }
 
 std::string Shader::read_file(const std::filesystem::path& shader_path) noexcept

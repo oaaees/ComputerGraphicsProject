@@ -36,6 +36,8 @@ public:
 
     GLuint get_program_id() const noexcept { return program_id; }
 
+    GLuint get_uniform_texture_sampler_id() const noexcept { return uniform_texture_sampler_id; }
+
     void use() const noexcept;
 
 private:
@@ -51,4 +53,12 @@ private:
     GLuint uniform_projection_id{0};
     GLuint uniform_view_id{0};
     GLuint uniform_model_id{0};
+    GLuint uniform_texture_sampler_id{0};
+
+    GLuint uniform_view_position_id{0};
+    GLuint uniform_material_shininess_id{0};
+    GLuint uniform_light_direction_id{0};
+    GLuint uniform_light_ambient_id{0};
+    GLuint uniform_light_diffuse_id{0};
+    GLuint uniform_light_specular_id{0};
 };

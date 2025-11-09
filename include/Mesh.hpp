@@ -10,7 +10,7 @@ class Mesh
 public:
     Mesh() = default;
 
-    static std::shared_ptr<Mesh> create(const std::vector<GLfloat>& vertices, std::vector<unsigned int>& indices) noexcept;
+    static std::shared_ptr<Mesh> create(const std::vector<GLfloat>& vertices, std::vector<unsigned int> indices) noexcept;
 
     Mesh(const Mesh& mesh) = delete;
 
