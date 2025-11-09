@@ -13,13 +13,22 @@
 class Room
 {
 public:
-    Room(const std::filesystem::path& root_path);
+    enum DoorSide
+    {
+        DOOR_NONE = 0,
+        DOOR_FRONT = 1 << 0, // +Z
+        DOOR_BACK = 1 << 1,  // -Z
+        DOOR_LEFT = 1 << 2,  // -X
+        DOOR_RIGHT = 1 << 3  // +X
+    };
+
+    // root_path: directory where textures/ live. door_mask: bitmask of DoorSide
+    Room(const std::filesystem::path &root_path, int door_mask = DOOR_NONE);
     ~Room() = default;
 
-    // void render(const std::shared_ptr<Shader>& shader);
     // Render the room with an explicit model matrix (allows placing multiple
     // copies of the room in the world).
-    void render(const std::shared_ptr<Shader>& shader, const glm::mat4& model);
+    void render(const std::shared_ptr<Shader> &shader, const glm::mat4 &model);
 
 private:
     std::shared_ptr<Mesh> floor_mesh;

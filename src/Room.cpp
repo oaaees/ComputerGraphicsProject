@@ -3,7 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-Room::Room(const std::filesystem::path& root_path)
+Room::Room(const std::filesystem::path &root_path, int door_mask)
 {
     // Load textures
     floor_texture = std::make_shared<Texture>(root_path / "textures" / "floor_albedo.jpg");
@@ -28,7 +28,7 @@ Room::Room(const std::filesystem::path& root_path)
          10.0f, -2.0f,  10.0f,  0.0f, 1.0f, 0.0f,   5.0f, 5.0f,
         -10.0f, -2.0f,  10.0f,  0.0f, 1.0f, 0.0f,   0.0f, 5.0f,
     };
-    std::vector<unsigned int> floor_indices = { 0, 2, 1, 0, 3, 2 };
+    std::vector<unsigned int> floor_indices = {0, 2, 1, 0, 3, 2};
     floor_mesh = Mesh::create(floor_vertices, floor_indices);
 
     // Ceiling
@@ -39,70 +39,131 @@ Room::Room(const std::filesystem::path& root_path)
          10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   2.0f, 1.0f,
         -10.0f,  8.0f,  10.0f,  0.0f, -1.0f, 0.0f,   0.0f, 1.0f,
     };
-    std::vector<unsigned int> ceiling_indices = { 0, 1, 2, 0, 2, 3 }; // Reversed winding for downward normal
+    std::vector<unsigned int> ceiling_indices = {0, 1, 2, 0, 2, 3}; // Reversed winding for downward normal
     ceiling_mesh = Mesh::create(ceiling_vertices, ceiling_indices);
 
-    // Walls
-    std::vector<GLfloat> wall_vertices = {
-        // Positions          // Normals           // Texture Coords
-        // Back wall
-        -10.0f, -2.0f, -10.0f,  0.0f, 0.0f, 1.0f,   0.0f, 0.0f,
-         10.0f, -2.0f, -10.0f,  0.0f, 0.0f, 1.0f,   2.0f, 0.0f,
-         10.0f,  8.0f, -10.0f,  0.0f, 0.0f, 1.0f,   2.0f, 1.0f,
-        -10.0f,  8.0f, -10.0f,  0.0f, 0.0f, 1.0f,   0.0f, 1.0f,
-        // Front wall
-        -10.0f, -2.0f, 10.0f,   0.0f, 0.0f, -1.0f,  2.0f, 0.0f,
-         10.0f, -2.0f, 10.0f,   0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
-         10.0f,  8.0f, 10.0f,   0.0f, 0.0f, -1.0f,  0.0f, 1.0f,
-        -10.0f,  8.0f, 10.0f,   0.0f, 0.0f, -1.0f,  2.0f, 1.0f,
-        // Left wall
-        -10.0f, -2.0f,  10.0f,  1.0f, 0.0f, 0.0f,   2.0f, 0.0f,
-        -10.0f, -2.0f, -10.0f,  1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-        -10.0f,  8.0f, -10.0f,  1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
-        -10.0f,  8.0f,  10.0f,  1.0f, 0.0f, 0.0f,   2.0f, 1.0f,
-        // Right wall
-         10.0f, -2.0f, -10.0f, -1.0f, 0.0f, 0.0f,   2.0f, 0.0f,
-         10.0f, -2.0f,  10.0f, -1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-         10.0f,  8.0f,  10.0f, -1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
-         10.0f,  8.0f, -10.0f, -1.0f, 0.0f, 0.0f,   2.0f, 1.0f,
+    // Walls: construct each wall as one or more quads so we can optionally
+    // create an opening (door) in the center of the wall when requested by
+    // the door_mask parameter.
+
+    std::vector<GLfloat> wall_vertices;
+    std::vector<unsigned int> wall_indices;
+    unsigned int idx_offset = 0;
+
+    auto addQuad = [&](const glm::vec3 &a, const glm::vec3 &b, const glm::vec3 &c, const glm::vec3 &d,
+                       const glm::vec3 &normal, const glm::vec2 &ta, const glm::vec2 &tb, const glm::vec2 &tc, const glm::vec2 &td)
+    {
+        // a,b,c,d are in counter-clockwise order when looking at the front side
+        auto pushV = [&](const glm::vec3 &p, const glm::vec3 &n, const glm::vec2 &t)
+        {
+            wall_vertices.push_back(p.x);
+            wall_vertices.push_back(p.y);
+            wall_vertices.push_back(p.z);
+            wall_vertices.push_back(n.x);
+            wall_vertices.push_back(n.y);
+            wall_vertices.push_back(n.z);
+            wall_vertices.push_back(t.x);
+            wall_vertices.push_back(t.y);
+        };
+
+        pushV(a, normal, ta);
+        pushV(b, normal, tb);
+        pushV(c, normal, tc);
+        pushV(d, normal, td);
+
+        wall_indices.push_back(idx_offset + 0);
+        wall_indices.push_back(idx_offset + 1);
+        wall_indices.push_back(idx_offset + 2);
+        wall_indices.push_back(idx_offset + 0);
+        wall_indices.push_back(idx_offset + 2);
+        wall_indices.push_back(idx_offset + 3);
+
+        idx_offset += 4;
     };
-    std::vector<unsigned int> wall_indices = {
-        0, 1, 2, 0, 2, 3,       // Back
-        4, 5, 6, 4, 6, 7,       // Front
-        8, 9, 10, 8, 10, 11,    // Left
-        12, 13, 14, 12, 14, 15  // Right
-    };
+
+    // Common dimensions
+    const float x_min = -10.0f, x_max = 10.0f;
+    const float z_min = -10.0f, z_max = 10.0f;
+    const float y_min = -2.0f, y_max = 8.0f;
+
+    // Door geometry (centered on wall)
+    const float door_width = 4.0f;
+    const float door_height = 6.0f; // from y_min to y_min + door_height
+    const float half_dw = door_width * 0.5f;
+    const float door_top = y_min + door_height;
+
+    // BACK wall (z = z_min). Normal towards +Z
+    if ((door_mask & Room::DOOR_BACK) == 0)
+    {
+        addQuad(glm::vec3(x_min, y_min, z_min), glm::vec3(x_max, y_min, z_min), glm::vec3(x_max, y_max, z_min), glm::vec3(x_min, y_max, z_min),
+                glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec2(2.0f, 0.0f), glm::vec2(2.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+    }
+    else
+    {
+        // left panel
+        addQuad(glm::vec3(x_min, y_min, z_min), glm::vec3(-half_dw, y_min, z_min), glm::vec3(-half_dw, y_max, z_min), glm::vec3(x_min, y_max, z_min),
+                glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+        // right panel
+        addQuad(glm::vec3(half_dw, y_min, z_min), glm::vec3(x_max, y_min, z_min), glm::vec3(x_max, y_max, z_min), glm::vec3(half_dw, y_max, z_min),
+                glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+        // top panel above door
+        addQuad(glm::vec3(-half_dw, door_top, z_min), glm::vec3(half_dw, door_top, z_min), glm::vec3(half_dw, y_max, z_min), glm::vec3(-half_dw, y_max, z_min),
+                glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+    }
+
+    // FRONT wall (z = z_max). Normal towards -Z
+    if ((door_mask & Room::DOOR_FRONT) == 0)
+    {
+        addQuad(glm::vec3(x_min, y_min, z_max), glm::vec3(x_max, y_min, z_max), glm::vec3(x_max, y_max, z_max), glm::vec3(x_min, y_max, z_max),
+                glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(2.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 1.0f), glm::vec2(2.0f, 1.0f));
+    }
+    else
+    {
+        addQuad(glm::vec3(x_min, y_min, z_max), glm::vec3(-half_dw, y_min, z_max), glm::vec3(-half_dw, y_max, z_max), glm::vec3(x_min, y_max, z_max),
+                glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(2.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(2.0f, 1.0f));
+        addQuad(glm::vec3(half_dw, y_min, z_max), glm::vec3(x_max, y_min, z_max), glm::vec3(x_max, y_max, z_max), glm::vec3(half_dw, y_max, z_max),
+                glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+        addQuad(glm::vec3(-half_dw, door_top, z_max), glm::vec3(half_dw, door_top, z_max), glm::vec3(half_dw, y_max, z_max), glm::vec3(-half_dw, y_max, z_max),
+                glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+    }
+
+    // LEFT wall (x = x_min). Normal towards +X
+    if ((door_mask & Room::DOOR_LEFT) == 0)
+    {
+        addQuad(glm::vec3(x_min, y_min, z_max), glm::vec3(x_min, y_min, z_min), glm::vec3(x_min, y_max, z_min), glm::vec3(x_min, y_max, z_max),
+                glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(2.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 1.0f), glm::vec2(2.0f, 1.0f));
+    }
+    else
+    {
+        // panels split along z for a centered door
+        addQuad(glm::vec3(x_min, y_min, z_min), glm::vec3(x_min, y_min, -half_dw), glm::vec3(x_min, y_max, -half_dw), glm::vec3(x_min, y_max, z_min),
+                glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+        addQuad(glm::vec3(x_min, y_min, half_dw), glm::vec3(x_min, y_min, z_max), glm::vec3(x_min, y_max, z_max), glm::vec3(x_min, y_max, half_dw),
+                glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+        addQuad(glm::vec3(x_min, door_top, -half_dw), glm::vec3(x_min, door_top, half_dw), glm::vec3(x_min, y_max, half_dw), glm::vec3(x_min, y_max, -half_dw),
+                glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+    }
+
+    // RIGHT wall (x = x_max). Normal towards -X
+    if ((door_mask & Room::DOOR_RIGHT) == 0)
+    {
+        addQuad(glm::vec3(x_max, y_min, z_min), glm::vec3(x_max, y_min, z_max), glm::vec3(x_max, y_max, z_max), glm::vec3(x_max, y_max, z_min),
+                glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(2.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 1.0f), glm::vec2(2.0f, 1.0f));
+    }
+    else
+    {
+        addQuad(glm::vec3(x_max, y_min, z_min), glm::vec3(x_max, y_min, -half_dw), glm::vec3(x_max, y_max, -half_dw), glm::vec3(x_max, y_max, z_min),
+                glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+        addQuad(glm::vec3(x_max, y_min, half_dw), glm::vec3(x_max, y_min, z_max), glm::vec3(x_max, y_max, z_max), glm::vec3(x_max, y_max, half_dw),
+                glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+        addQuad(glm::vec3(x_max, door_top, -half_dw), glm::vec3(x_max, door_top, half_dw), glm::vec3(x_max, y_max, half_dw), glm::vec3(x_max, y_max, -half_dw),
+                glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+    }
+
     wall_mesh = Mesh::create(wall_vertices, wall_indices);
 }
 
-// void Room::render(const std::shared_ptr<Shader>& shader)
-// {
-//     glm::mat4 model{1.f};
-//     glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
-
-//     // Render floor (more shiny)
-//     glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 32.0f);
-//     floor_texture->use(); // Binds to GL_TEXTURE0
-//     glActiveTexture(GL_TEXTURE1);
-//     glBindTexture(GL_TEXTURE_2D, floor_normal_texture->get_id());
-//     floor_mesh->render();
-
-//     // Render ceiling (less shiny)
-//     glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 16.0f);
-//     wall_texture->use(); // Use the wall's albedo texture
-//     glActiveTexture(GL_TEXTURE1);
-//     glBindTexture(GL_TEXTURE_2D, wall_normal_texture->get_id()); // Use the wall's normal map
-//     ceiling_mesh->render();
-
-//     // Render walls (matte)
-//     glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 64.0f);
-//     wall_texture->use(); // Binds to GL_TEXTURE0
-//     glActiveTexture(GL_TEXTURE1);
-//     glBindTexture(GL_TEXTURE_2D, wall_normal_texture->get_id());
-//     wall_mesh->render();
-// }
-
-void Room::render(const std::shared_ptr<Shader>& shader, const glm::mat4& model)
+void Room::render(const std::shared_ptr<Shader> &shader, const glm::mat4 &model)
 {
     glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
 
