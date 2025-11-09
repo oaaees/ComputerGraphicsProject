@@ -16,7 +16,10 @@ public:
     Room(const std::filesystem::path& root_path);
     ~Room() = default;
 
-    void render(const std::shared_ptr<Shader>& shader);
+    // void render(const std::shared_ptr<Shader>& shader);
+    // Render the room with an explicit model matrix (allows placing multiple
+    // copies of the room in the world).
+    void render(const std::shared_ptr<Shader>& shader, const glm::mat4& model);
 
 private:
     std::shared_ptr<Mesh> floor_mesh;

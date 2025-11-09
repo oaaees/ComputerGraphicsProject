@@ -75,9 +75,35 @@ Room::Room(const std::filesystem::path& root_path)
     wall_mesh = Mesh::create(wall_vertices, wall_indices);
 }
 
-void Room::render(const std::shared_ptr<Shader>& shader)
+// void Room::render(const std::shared_ptr<Shader>& shader)
+// {
+//     glm::mat4 model{1.f};
+//     glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
+
+//     // Render floor (more shiny)
+//     glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 32.0f);
+//     floor_texture->use(); // Binds to GL_TEXTURE0
+//     glActiveTexture(GL_TEXTURE1);
+//     glBindTexture(GL_TEXTURE_2D, floor_normal_texture->get_id());
+//     floor_mesh->render();
+
+//     // Render ceiling (less shiny)
+//     glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 16.0f);
+//     wall_texture->use(); // Use the wall's albedo texture
+//     glActiveTexture(GL_TEXTURE1);
+//     glBindTexture(GL_TEXTURE_2D, wall_normal_texture->get_id()); // Use the wall's normal map
+//     ceiling_mesh->render();
+
+//     // Render walls (matte)
+//     glUniform1f(glGetUniformLocation(shader->get_program_id(), "material.shininess"), 64.0f);
+//     wall_texture->use(); // Binds to GL_TEXTURE0
+//     glActiveTexture(GL_TEXTURE1);
+//     glBindTexture(GL_TEXTURE_2D, wall_normal_texture->get_id());
+//     wall_mesh->render();
+// }
+
+void Room::render(const std::shared_ptr<Shader>& shader, const glm::mat4& model)
 {
-    glm::mat4 model{1.f};
     glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
 
     // Render floor (more shiny)

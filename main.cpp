@@ -64,6 +64,16 @@ int main()
     // Create the room
     Room room(Data::root_path);
 
+    // Prepare transforms for multiple room instances (museum layout)
+    // We'll place 5 rooms in a cross layout: center + four directions.
+    std::vector<glm::mat4> roomTransforms;
+    const float roomSpacing = 20.05f; // spacing between room centers; tune as needed
+    roomTransforms.push_back(glm::mat4(1.0f)); // center
+    roomTransforms.push_back(glm::translate(glm::mat4(1.0f), glm::vec3(roomSpacing, 0.0f, 0.0f))); // +X
+    roomTransforms.push_back(glm::translate(glm::mat4(1.0f), glm::vec3(-roomSpacing, 0.0f, 0.0f))); // -X
+    roomTransforms.push_back(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, roomSpacing))); // +Z
+    roomTransforms.push_back(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -roomSpacing))); // -Z
+
     // Create the shared mesh for all lightbulbs
     Lightbulb::create_mesh();
 
@@ -175,7 +185,7 @@ int main()
 
                 // Render scene geometry for depth
                 // Room
-                room.render(depthShader);
+                // room.render(depthShader);
                 // Imported models
                 if (!imported_models.empty()) {
                     // Render the same four instances used in the main pass so shadows
@@ -290,8 +300,10 @@ int main()
             lightbulbs[i].use_light(Data::shader_list[0], i);
         }
 
-        // Render the room with its material properties
-        room.render(Data::shader_list[0]);
+        // Render the room instances (museum composed of multiple rooms)
+        for (const auto &rt : roomTransforms) {
+            room.render(Data::shader_list[0], rt);
+        }
 
         // --- Render imported model(s) (simple test) ---
         if (!imported_models.empty()) {
