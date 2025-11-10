@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <string>
 
 #include <Camera.hpp>
 #include <Mesh.hpp>
@@ -132,6 +133,50 @@ int main()
     auto depthShader = Shader::create_from_files(Data::root_path / "shaders" / "depth_cube.vert", Data::root_path / "shaders" / "depth_cube.frag");
     ShadowCubemap shadowCubemap(SHADOW_SIZE, SHADOW_FAR);
 
+    // --- Spot shadow maps (one per room) ---
+    const int SPOT_COUNT = 5;
+    const unsigned int SPOT_SHADOW_RES = 1024;
+    std::vector<GLuint> spotDepthMaps(SPOT_COUNT, 0);
+    std::vector<GLuint> spotDepthFBOs(SPOT_COUNT, 0);
+    for (int i = 0; i < SPOT_COUNT; ++i)
+    {
+        glGenTextures(1, &spotDepthMaps[i]);
+        glBindTexture(GL_TEXTURE_2D, spotDepthMaps[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SPOT_SHADOW_RES, SPOT_SHADOW_RES, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        float borderColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+        GLuint fbo = 0;
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, spotDepthMaps[i], 0);
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        {
+            // Spot shadow FBO not complete (no debug output)
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        spotDepthFBOs[i] = fbo;
+    }
+
+    // Depth shader for spotlights (simple depth-only shader)
+    const std::string spotDepthVert = R"(
+#version 410
+layout (location = 0) in vec3 aPos;
+uniform mat4 lightSpaceMatrix;
+uniform mat4 model;
+void main(){ gl_Position = lightSpaceMatrix * model * vec4(aPos, 1.0); }
+)";
+    const std::string spotDepthFrag = R"(#version 410
+void main(){}
+)";
+    auto spotDepthShader = Shader::create_from_strings(spotDepthVert, spotDepthFrag);
+
     // Runtime shadow controls were removed (use fixed parameters)
     const bool enableShadows = true;
 
@@ -178,7 +223,6 @@ int main()
             if (!lightbulbs.empty())
                 lightbulbs[0].set_position(lp);
             prevLp = lp;
-            std::cout << "light position = (" << lp.x << ", " << lp.y << ", " << lp.z << ")\n";
         }
 
         // (Removed runtime shadow key handlers and noisy console prints)
@@ -303,6 +347,105 @@ int main()
             glViewport(0, 0, main_window->get_buffer_width(), main_window->get_buffer_height());
         }
 
+        // --- Spot shadow pass: render each spotlight's depth map ---
+        {
+            // We'll render from each room's ceiling downward with a perspective
+            // projection matching the spot outer cone.
+            const float spotOuterDeg = 17.5f;
+            const float spotFov = spotOuterDeg * 2.0f; // cover full cone
+            const float near_plane_spot = 0.1f;
+            const float far_plane_spot = 25.0f;
+
+            for (int si = 0; si < (int)roomTransforms.size() && si < (int)spotDepthFBOs.size(); ++si)
+            {
+                glm::vec3 spos = glm::vec3(roomTransforms[si] * glm::vec4(0.0f, 7.5f, 0.0f, 1.0f));
+                glm::vec3 sdir = glm::vec3(0.0f, -1.0f, 0.0f);
+
+                glm::mat4 lightProj = glm::perspective(glm::radians(spotFov), 1.0f, near_plane_spot, far_plane_spot);
+                // choose an up vector that is not parallel to direction
+                glm::vec3 up = fabs(sdir.y) > 0.99f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+                glm::mat4 lightView = glm::lookAt(spos, spos + sdir, up);
+                glm::mat4 lightSpace = lightProj * lightView;
+
+                // Render scene depth from spotlight POV
+                glViewport(0, 0, 1024, 1024);
+                glBindFramebuffer(GL_FRAMEBUFFER, spotDepthFBOs[si]);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                spotDepthShader->use();
+                glUniformMatrix4fv(glGetUniformLocation(spotDepthShader->get_program_id(), "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpace));
+
+                // Render rooms (shadow-caster geometry)
+                for (size_t ri = 0; ri < rooms.size() && ri < roomTransforms.size(); ++ri)
+                {
+                    rooms[ri].render_for_depth(spotDepthShader, roomTransforms[ri]);
+                }
+
+                // Render imported models and props into spot depth
+                if (!imported_models.empty())
+                {
+                    const float modelScale = 2.0f;
+                    const float floorY = -2.0f;
+                    std::vector<glm::vec3> positions = {
+                        glm::vec3(0.0f, floorY, 6.0f),
+                        glm::vec3(0.0f, floorY, -6.0f),
+                        glm::vec3(6.0f, floorY, 0.0f),
+                        glm::vec3(-6.0f, floorY, 0.0f)};
+                    std::vector<float> rotations = {0.0f, glm::pi<float>(), glm::radians(-90.0f), glm::radians(90.0f)};
+
+                    for (auto &r : imported_models)
+                    {
+                        for (size_t i = 0; i < positions.size(); ++i)
+                        {
+                            glm::mat4 modelMat{1.0f};
+                            modelMat = glm::translate(modelMat, positions[i]);
+                            modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                            modelMat = glm::scale(modelMat, glm::vec3(modelScale));
+                            modelMat = modelMat * r.transform;
+                            glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                            r.mesh->render();
+                        }
+                    }
+                    // props
+                    float tableHeight = 0.0f;
+                    for (auto &r : imported_models)
+                        tableHeight = std::max(tableHeight, r.src_max.y - r.src_min.y);
+                    tableHeight *= modelScale;
+
+                    std::vector<float> perPropFootprint = {0.15f, 0.6f, 0.8f, 1.5f};
+                    for (size_t i = 0; i < prop_models.size() && i < positions.size(); ++i)
+                    {
+                        auto &group = prop_models[i];
+                        glm::vec3 basePos = positions[i];
+                        basePos.y = floorY + tableHeight + 0.02f;
+                        for (auto &pr : group)
+                        {
+                            glm::vec3 srcSize = pr.src_max - pr.src_min;
+                            glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
+                            float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
+                            float target = (i < perPropFootprint.size()) ? perPropFootprint[i] : 0.6f;
+                            float scaleUniform = target / footprintDim;
+                            scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
+                            glm::mat4 modelMat{1.0f};
+                            modelMat = glm::translate(modelMat, basePos);
+                            modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
+                            glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
+                            modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
+                            glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                            pr.mesh->render();
+                        }
+                    }
+                }
+
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                // restore viewport
+                glViewport(0, 0, main_window->get_buffer_width(), main_window->get_buffer_height());
+
+                // Upload lightSpace matrix into main shader uniform array
+                Data::shader_list[0]->use();
+                std::string name = "spotLightSpaceMatrices[" + std::to_string(si) + "]";
+                glUniformMatrix4fv(glGetUniformLocation(Data::shader_list[0]->get_program_id(), name.c_str()), 1, GL_FALSE, glm::value_ptr(lightSpace));
+            }
+        }
         // Clear the window
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -340,6 +483,41 @@ int main()
         {
             lightbulbs[i].use_light(Data::shader_list[0], i);
         }
+
+        // Spotlights: one ceiling fixture per room. We map up to NR_SPOT_LIGHTS
+        // (shader compile-time constant) spot lights from the room transforms.
+        // These are simple cone lights (no shadows) and add local ceiling lighting.
+        for (size_t si = 0; si < roomTransforms.size() && si < 5; ++si)
+        {
+            // Position is ceiling local point (y=7.5) transformed by room matrix
+            glm::vec3 spos = glm::vec3(roomTransforms[si] * glm::vec4(0.0f, 7.5f, 0.0f, 1.0f));
+            glm::vec3 sdir = glm::vec3(0.0f, -1.0f, 0.0f); // straight down
+
+            std::string base = "spotLights[" + std::to_string(si) + "]";
+            glUniform3fv(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".position").c_str()), 1, glm::value_ptr(spos));
+            glUniform3fv(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".direction").c_str()), 1, glm::value_ptr(sdir));
+            // Make spotlights more visible by widening cone, increasing intensity and reducing attenuation
+            glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".cutOff").c_str()), cos(glm::radians(30.0f)));
+            glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".outerCutOff").c_str()), cos(glm::radians(40.0f)));
+            glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".constant").c_str()), 1.0f);
+            // Less aggressive attenuation so the spot covers more of the room
+            glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".linear").c_str()), 0.09f);
+            glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".quadratic").c_str()), 0.032f);
+            // Slightly higher ambient and much stronger diffuse to make the fixture visibly light the room
+            glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".ambient").c_str()), 0.02f, 0.02f, 0.02f);
+            glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".diffuse").c_str()), 3.0f, 3.0f, 2.7f);
+            glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".specular").c_str()), 1.0f, 1.0f, 1.0f);
+        }
+
+        // Bind spot shadow maps into texture units 4..8 for shader sampling
+        for (int si = 0; si < (int)spotDepthMaps.size(); ++si)
+        {
+            glActiveTexture(GL_TEXTURE4 + si);
+            glBindTexture(GL_TEXTURE_2D, spotDepthMaps[si]);
+            std::string name = "spotShadowMaps[" + std::to_string(si) + "]";
+            glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), name.c_str()), 4 + si);
+        }
+        // spot shadows are bound; no debug toggle to set here
 
         // Render the room instances (museum composed of multiple rooms)
         for (size_t i = 0; i < roomTransforms.size() && i < rooms.size(); ++i)

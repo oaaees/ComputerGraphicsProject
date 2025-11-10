@@ -41,6 +41,31 @@ struct PointLight {
 #define NR_POINT_LIGHTS 1
 uniform PointLight pointLights[NR_POINT_LIGHTS];
 
+// Spot lights (one per room ceiling)
+#define NR_SPOT_LIGHTS 5
+struct SpotLight {
+    vec3 position;
+    vec3 direction;
+
+    float cutOff;       // cosine of inner cone angle
+    float outerCutOff;  // cosine of outer cone angle
+
+    float constant;
+    float linear;
+    float quadratic;
+
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};
+uniform SpotLight spotLights[NR_SPOT_LIGHTS];
+
+vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
+// Spot shadowing
+uniform sampler2D spotShadowMaps[NR_SPOT_LIGHTS];
+uniform mat4 spotLightSpaceMatrices[NR_SPOT_LIGHTS];
+float CalcSpotShadow(int index, vec3 fragPos);
+
 // Shadow cubemap for the (single) point light
 uniform samplerCube shadowMap;
 uniform float far_plane;
@@ -72,6 +97,15 @@ void main()
     // Phase 2: Point lights
     for(int i = 0; i < NR_POINT_LIGHTS; i++)
         result += CalcPointLight(pointLights[i], norm, FragPos, viewDir);    
+
+    // Phase 3: Spot lights (ceiling fixtures)
+    for (int i = 0; i < NR_SPOT_LIGHTS; ++i)
+    {
+        vec3 spotContribution = CalcSpotLight(spotLights[i], norm, FragPos, viewDir);
+        // apply shadow for spot (always computed)
+        float sshadow = CalcSpotShadow(i, FragPos);
+        result += (1.0 - sshadow) * spotContribution;
+    }
 
     // Global ambient light
     vec3 ambient = vec3(0.1) * texture(texture_sampler, TexCoord).rgb;
@@ -166,5 +200,67 @@ float CalcPointShadow(PointLight light, vec3 normal, vec3 fragPos)
     }
 
     float shadow = occluded / float(SAMPLE_COUNT);
+    return shadow;
+}
+
+// Spot light calculation: similar to a point light but with a cone
+vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
+{
+    vec3 lightDir = normalize(light.position - fragPos);
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+    float distance = length(light.position - fragPos);
+    float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+
+    // Spotlight intensity based on angle between light direction and the
+    // vector from light to fragment. Use fragPos - light.position so that
+    // when light.direction points toward the fragment the dot is near 1.0.
+    float theta = dot(normalize(fragPos - light.position), normalize(light.direction));
+    float epsilon = light.cutOff - light.outerCutOff;
+    float intensity = clamp((theta - light.outerCutOff) / max(epsilon, 1e-6), 0.0, 1.0);
+
+    vec3 ambient = light.ambient * texture(texture_sampler, TexCoord).rgb;
+    vec3 diffuse = light.diffuse * diff * texture(texture_sampler, TexCoord).rgb;
+    vec3 specular = light.specular * spec * vec3(1.0);
+
+    ambient *= attenuation * intensity;
+    diffuse *= attenuation * intensity;
+    specular *= attenuation * intensity;
+
+    // No shadowing applied for spotlights in this simple implementation.
+    return (ambient + diffuse + specular);
+}
+
+float CalcSpotShadow(int index, vec3 fragPos)
+{
+    // Transform fragment into light clip space
+    vec4 fragPosLS = spotLightSpaceMatrices[index] * vec4(fragPos, 1.0);
+    vec3 projCoords = fragPosLS.xyz / fragPosLS.w;
+    // Transform to [0,1]
+    projCoords = projCoords * 0.5 + 0.5;
+
+    // If outside the light's frustum, no shadow
+    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0 || projCoords.z < 0.0 || projCoords.z > 1.0)
+        return 0.0;
+
+    float currentDepth = projCoords.z;
+
+    // PCF sampling
+    float shadow = 0.0;
+    float bias = 0.005;
+    const int samples = 4;
+    float texelSize = 1.0 / 1024.0; // matches depth map resolution in main.cpp
+    for (int x = -1; x <= 1; x += 2)
+    {
+        for (int y = -1; y <= 1; y += 2)
+        {
+            vec2 offset = vec2(float(x), float(y)) * texelSize;
+            float closestDepth = texture(spotShadowMaps[index], projCoords.xy + offset).r;
+            if (currentDepth - bias > closestDepth)
+                shadow += 1.0;
+        }
+    }
+    shadow /= float(4);
     return shadow;
 }
