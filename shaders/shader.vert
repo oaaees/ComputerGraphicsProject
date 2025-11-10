@@ -8,6 +8,7 @@ layout (location = 3) in vec3 aTangent;
 out vec2 TexCoord;
 out vec3 FragPos;
 out mat3 TBN;
+out vec3 GeomNormal;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -26,4 +27,5 @@ void main()
     T = normalize(T - dot(T, N) * N); // Gram-Schmidt process to re-orthogonalize
     vec3 B = cross(N, T);
     TBN = mat3(T, B, N);
+    GeomNormal = N;
 }

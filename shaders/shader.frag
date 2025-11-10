@@ -3,6 +3,7 @@
 in vec2 TexCoord;
 in vec3 FragPos;
 in mat3 TBN;
+in vec3 GeomNormal;
 
 out vec4 FragColor;
 
@@ -56,7 +57,12 @@ void main()
     // The range [0,1] is mapped to [-1,1].
     vec3 norm = texture(normal_sampler, TexCoord).rgb;
     norm = normalize(norm * 2.0 - 1.0);
+    // transform sampled normal from tangent to world space
     norm = normalize(TBN * norm);
+    // Ensure normal-map normal lies in same hemisphere as geometric normal
+    // to avoid inverted lighting on the opposite side.
+    if (dot(GeomNormal, norm) < 0.0)
+        norm = -norm;
 
     vec3 viewDir = normalize(viewPosition - FragPos);
 
@@ -106,10 +112,16 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     diffuse *= attenuation;
     specular *= attenuation;
     // Shadow calculation for point light (cubemap)
-    float shadow = CalcPointShadow(light, normal, fragPos);
-    // Reduce diffuse and specular when in shadow
-    diffuse *= (1.0 - shadow);
-    specular *= (1.0 - shadow);
+    // Only apply shadows when the surface is actually facing the light.
+    // This prevents a shadow that was cast onto one side of a thin wall
+    // from darkening the opposite face.
+    float shadow = 0.0;
+    if (diff > 0.0) {
+        shadow = CalcPointShadow(light, normal, fragPos);
+        // Reduce diffuse and specular when in shadow
+        diffuse *= (1.0 - shadow);
+        specular *= (1.0 - shadow);
+    }
     return (ambient + diffuse + specular);
 }
 

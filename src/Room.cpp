@@ -76,21 +76,88 @@ Room::Room(const std::filesystem::path &root_path, int door_mask)
                         side_vertices.push_back(t.y);
                 };
 
+                // Build a thin box from the given quad (a,b,c,d) with the provided
+                // outward normal. This produces 8 vertices and 12 triangles (36
+                // indices) per quad so walls have real thickness and cast
+                // physically-correct shadows.
+                const float wall_thickness = 0.08f; // meters; tweak if needed
                 auto addQuadLocal = [&](const glm::vec3 &a, const glm::vec3 &b, const glm::vec3 &c, const glm::vec3 &d,
                                                                 const glm::vec3 &normal, const glm::vec2 &ta, const glm::vec2 &tb, const glm::vec2 &tc, const glm::vec2 &td)
                 {
-                        pushV(a, normal, ta);
-                        pushV(b, normal, tb);
-                        pushV(c, normal, tc);
-                        pushV(d, normal, td);
+                        glm::vec3 off = normal * (wall_thickness * 0.5f);
+                        // front (towards normal)
+                        glm::vec3 af = a + off;
+                        glm::vec3 bf = b + off;
+                        glm::vec3 cf = c + off;
+                        glm::vec3 df = d + off;
+                        // back (away from normal)
+                        glm::vec3 ab = a - off;
+                        glm::vec3 bb = b - off;
+                        glm::vec3 cb = c - off;
+                        glm::vec3 db = d - off;
 
+                        // push front verts (use provided uvs)
+                        pushV(af, normal, ta);
+                        pushV(bf, normal, tb);
+                        pushV(cf, normal, tc);
+                        pushV(df, normal, td);
+
+                        // push back verts (normals inverted)
+                        pushV(ab, -normal, ta);
+                        pushV(bb, -normal, tb);
+                        pushV(cb, -normal, tc);
+                        pushV(db, -normal, td);
+
+                        // indices (base index)
+                        // front face
                         side_indices.push_back(idx + 0);
                         side_indices.push_back(idx + 1);
                         side_indices.push_back(idx + 2);
                         side_indices.push_back(idx + 0);
                         side_indices.push_back(idx + 2);
                         side_indices.push_back(idx + 3);
-                        idx += 4;
+
+                        // back face (reversed winding so normal points outward)
+                        side_indices.push_back(idx + 4);
+                        side_indices.push_back(idx + 6);
+                        side_indices.push_back(idx + 5);
+                        side_indices.push_back(idx + 4);
+                        side_indices.push_back(idx + 7);
+                        side_indices.push_back(idx + 6);
+
+                        // side AB
+                        side_indices.push_back(idx + 0);
+                        side_indices.push_back(idx + 1);
+                        side_indices.push_back(idx + 5);
+                        side_indices.push_back(idx + 0);
+                        side_indices.push_back(idx + 5);
+                        side_indices.push_back(idx + 4);
+
+                        // side BC
+                        side_indices.push_back(idx + 1);
+                        side_indices.push_back(idx + 2);
+                        side_indices.push_back(idx + 6);
+                        side_indices.push_back(idx + 1);
+                        side_indices.push_back(idx + 6);
+                        side_indices.push_back(idx + 5);
+
+                        // side CD
+                        side_indices.push_back(idx + 2);
+                        side_indices.push_back(idx + 3);
+                        side_indices.push_back(idx + 7);
+                        side_indices.push_back(idx + 2);
+                        side_indices.push_back(idx + 7);
+                        side_indices.push_back(idx + 6);
+
+                        // side DA
+                        side_indices.push_back(idx + 3);
+                        side_indices.push_back(idx + 0);
+                        side_indices.push_back(idx + 4);
+                        side_indices.push_back(idx + 3);
+                        side_indices.push_back(idx + 4);
+                        side_indices.push_back(idx + 7);
+
+                        idx += 8;
                 };
 
                 // Let caller add quads to this side using addQuadLocal
@@ -98,8 +165,50 @@ Room::Room(const std::filesystem::path &root_path, int door_mask)
 
                 if (!side_vertices.empty())
                 {
-                        auto m = Mesh::create(side_vertices, side_indices);
-                        walls.push_back(std::make_shared<Wall>(m, wall_texture, wall_normal_texture));
+                        // Create the front-facing mesh (original winding). This
+                        // mesh will be used for shadow rendering.
+                        auto m_front = Mesh::create(side_vertices, side_indices);
+                        // visual: add the front face
+                        walls.push_back(std::make_shared<Wall>(m_front, wall_texture, wall_normal_texture));
+                        // shadow: front face should cast shadows
+                        shadow_walls.push_back(std::make_shared<Wall>(m_front, wall_texture, wall_normal_texture));
+
+                        // Build back-face geometry (negated normals, reversed winding)
+                        size_t vert_count = side_vertices.size() / 8; // 8 floats per input vertex
+                        std::vector<GLfloat> back_vertices;
+                        back_vertices.reserve(side_vertices.size());
+                        for (size_t vi = 0; vi < vert_count; ++vi)
+                        {
+                                // pos
+                                back_vertices.push_back(side_vertices[vi * 8 + 0]);
+                                back_vertices.push_back(side_vertices[vi * 8 + 1]);
+                                back_vertices.push_back(side_vertices[vi * 8 + 2]);
+                                // normal (negated)
+                                back_vertices.push_back(-side_vertices[vi * 8 + 3]);
+                                back_vertices.push_back(-side_vertices[vi * 8 + 4]);
+                                back_vertices.push_back(-side_vertices[vi * 8 + 5]);
+                                // uv
+                                back_vertices.push_back(side_vertices[vi * 8 + 6]);
+                                back_vertices.push_back(side_vertices[vi * 8 + 7]);
+                        }
+
+                        std::vector<unsigned int> back_indices;
+                        back_indices.reserve(side_indices.size());
+                        for (size_t ii = 0; ii < side_indices.size(); ii += 3)
+                        {
+                                unsigned int a = side_indices[ii + 0];
+                                unsigned int b = side_indices[ii + 1];
+                                unsigned int c = side_indices[ii + 2];
+                                // reversed winding for back face
+                                back_indices.push_back(c);
+                                back_indices.push_back(b);
+                                back_indices.push_back(a);
+                        }
+
+                        auto m_back = Mesh::create(back_vertices, back_indices);
+                        // visual: add the back face mesh, but do NOT add it to
+                        // shadow_walls so it won't write into the depth cubemap.
+                        walls.push_back(std::make_shared<Wall>(m_back, wall_texture, wall_normal_texture));
                 }
         };
 
@@ -210,4 +319,20 @@ void Room::render(const std::shared_ptr<Shader> &shader, const glm::mat4 &model)
                 if (w)
                         w->render(shader, model);
         }
+}
+
+void Room::render_for_depth(const std::shared_ptr<Shader> &shader, const glm::mat4 &model)
+{
+    glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(model));
+
+    // Render floor and ceiling into the depth map
+    floor_mesh->render();
+    ceiling_mesh->render();
+
+    // Render only shadow-casting walls (front faces)
+    for (const auto &w : shadow_walls)
+    {
+        if (w)
+            w->render(shader, model);
+    }
 }

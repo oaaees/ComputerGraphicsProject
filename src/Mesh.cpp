@@ -29,23 +29,44 @@ std::shared_ptr<Mesh> Mesh::create(const std::vector<GLfloat>& vertices, std::ve
         glm::vec2 deltaUV1 = uv1 - uv0;
         glm::vec2 deltaUV2 = uv2 - uv0;
 
-        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+        float denom = (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+        // Guard against degenerate UVs (zero denominator). If degenerate,
+        // skip this triangle's tangent contribution. We'll synthesize a
+        // fallback tangent per-vertex later when needed.
+        if (fabs(denom) > 1e-6f)
+        {
+            float f = 1.0f / denom;
 
-        glm::vec3 tangent;
-        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            glm::vec3 tangent;
+            tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
 
-        tangents[i0] += tangent;
-        tangents[i1] += tangent;
-        tangents[i2] += tangent;
+            tangents[i0] += tangent;
+            tangents[i1] += tangent;
+            tangents[i2] += tangent;
+        }
     }
 
     // Build final vertex buffer with tangents
     final_vertices.reserve(vertices.size() / 8 * 11);
     for(size_t i = 0; i < vertices.size() / 8; ++i) {
         glm::vec3 n(vertices[i * 8 + 3], vertices[i * 8 + 4], vertices[i * 8 + 5]);
-        glm::vec3 t = glm::normalize(tangents[i]);
+        glm::vec3 t = tangents[i];
+        // If accumulated tangent is (near) zero (e.g. degenerate UVs),
+        // synthesize a stable tangent perpendicular to the normal. This
+        // prevents NaNs when normal mapping procedurally-generated
+        // geometry with poor UVs (thin boxes / reused UVs).
+        if (glm::length(t) < 1e-6f)
+        {
+            // Pick an arbitrary vector that's not parallel to n
+            glm::vec3 arbitrary = (fabs(n.x) < 0.9f) ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+            t = glm::normalize(glm::cross(arbitrary, n));
+        }
+        else
+        {
+            t = glm::normalize(t);
+        }
         // Gram-Schmidt orthogonalize
         t = glm::normalize(t - glm::dot(t, n) * n);
 

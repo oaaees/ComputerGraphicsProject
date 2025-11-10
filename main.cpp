@@ -195,6 +195,13 @@ int main()
             // Render to each face
             glViewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
             glBindFramebuffer(GL_FRAMEBUFFER, shadowCubemap.get_fbo());
+            // Enable face culling for the depth pass so only the side of
+            // geometry facing the light contributes to the shadow map.
+            // This prevents thin duplicated geometry (two-sided walls) from
+            // both writing depth and causing shadows to appear on the
+            // opposite face.
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
             for (unsigned int face = 0; face < 6; ++face)
             {
                 glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, shadowCubemap.get_depth_cubemap_id(), 0);
@@ -207,10 +214,11 @@ int main()
                 glUniform1f(glGetUniformLocation(depthShader->get_program_id(), "far_plane"), SHADOW_FAR);
 
                 // Render scene geometry for depth
-                // Rooms (render all room instances so walls/floor cast shadows)
+                // Rooms (render only shadow-casting parts so walls/floor cast
+                // shadows but duplicated back-faces do not write depth).
                 for (size_t ri = 0; ri < rooms.size() && ri < roomTransforms.size(); ++ri)
                 {
-                    rooms[ri].render(depthShader, roomTransforms[ri]);
+                    rooms[ri].render_for_depth(depthShader, roomTransforms[ri]);
                 }
                 // Imported models
                 if (!imported_models.empty())
@@ -288,6 +296,8 @@ int main()
                     }
                 }
             }
+            // Restore face culling state
+            glDisable(GL_CULL_FACE);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             // Restore viewport to window
             glViewport(0, 0, main_window->get_buffer_width(), main_window->get_buffer_height());

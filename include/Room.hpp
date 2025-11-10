@@ -30,12 +30,18 @@ public:
     // Render the room with an explicit model matrix (allows placing multiple
     // copies of the room in the world).
     void render(const std::shared_ptr<Shader> &shader, const glm::mat4 &model);
+    // Render only the geometry that should contribute to shadow maps.
+    void render_for_depth(const std::shared_ptr<Shader> &shader, const glm::mat4 &model);
 
 private:
     std::shared_ptr<Mesh> floor_mesh;
     // Each side (or panel) is represented by a Wall so we can render them
-    // individually (useful for shadow passes).
+    // individually. `walls` holds geometry rendered in the main pass;
+    // `shadow_walls` holds only the geometry that should be rendered into
+    // shadow maps (we avoid writing duplicated back-faces into depth
+    // cubemaps so shadows don't leak through thin walls).
     std::vector<std::shared_ptr<Wall>> walls;
+    std::vector<std::shared_ptr<Wall>> shadow_walls;
     std::shared_ptr<Mesh> ceiling_mesh;
     std::shared_ptr<Texture> floor_texture;
     std::shared_ptr<Texture> floor_normal_texture;
