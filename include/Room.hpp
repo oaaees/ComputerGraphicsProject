@@ -9,6 +9,7 @@
 #include <Mesh.hpp>
 #include <Texture.hpp>
 #include <Shader.hpp>
+#include <Wall.hpp>
 
 class Room
 {
@@ -32,7 +33,9 @@ public:
 
 private:
     std::shared_ptr<Mesh> floor_mesh;
-    std::shared_ptr<Mesh> wall_mesh;
+    // Each side (or panel) is represented by a Wall so we can render them
+    // individually (useful for shadow passes).
+    std::vector<std::shared_ptr<Wall>> walls;
     std::shared_ptr<Mesh> ceiling_mesh;
     std::shared_ptr<Texture> floor_texture;
     std::shared_ptr<Texture> floor_normal_texture;

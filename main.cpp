@@ -207,8 +207,11 @@ int main()
                 glUniform1f(glGetUniformLocation(depthShader->get_program_id(), "far_plane"), SHADOW_FAR);
 
                 // Render scene geometry for depth
-                // Room
-                // room.render(depthShader);
+                // Rooms (render all room instances so walls/floor cast shadows)
+                for (size_t ri = 0; ri < rooms.size() && ri < roomTransforms.size(); ++ri)
+                {
+                    rooms[ri].render(depthShader, roomTransforms[ri]);
+                }
                 // Imported models
                 if (!imported_models.empty())
                 {

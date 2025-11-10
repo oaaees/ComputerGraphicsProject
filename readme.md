@@ -1,6 +1,3 @@
-# Tangram Puzzle
-This is a 3D Tangram puzzle game.
-
 ## Computer Graphics — Museum Showcase
 
 This repository is a small Computer Graphics project that renders a simple museum-like room and places a set of imported 3D objects (tables and props) under a movable ceiling light. It was built as a learning / demo project to explore model import, material handling, normal mapping, and omnidirectional shadowing in OpenGL.
