@@ -112,6 +112,15 @@ int main()
         prop_models.push_back(std::move(group));
     }
 
+    // Load potted plant model (one to place in each corner). If the file
+    // doesn't exist or fails to load, AssimpLoader::loadModel returns empty
+    // and the code below will simply skip rendering them.
+    std::vector<AssimpLoader::Renderable> potted_models = AssimpLoader::loadModel(Data::root_path / "models" / "potted_plant_01_1k.gltf");
+    // Load picture frames to place on the walls. If missing, loader returns empty and they are skipped.
+    std::vector<AssimpLoader::Renderable> picture_models = AssimpLoader::loadModel(Data::root_path / "models" / "fancy_picture_frame_01_1k.gltf");
+    // Load the second variant and place them on the opposite side of the door holes.
+    std::vector<AssimpLoader::Renderable> picture2_models = AssimpLoader::loadModel(Data::root_path / "models" / "fancy_picture_frame_02_1k.gltf");
+
     // Create a single lightbulb in the middle of the ceiling (we'll shadow this one)
     std::vector<Lightbulb> lightbulbs;
     PointLight ceilingLight(glm::vec3{0.0f, 7.5f, 0.0f},
@@ -296,6 +305,88 @@ void main(){}
                         }
                     }
 
+                    // Also render potted plants into the depth cubemap so they cast shadows
+                    if (!potted_models.empty())
+                    {
+                        // positions for four corners (near each corner of the central room)
+                        std::vector<glm::vec3> potPositions = {
+                            glm::vec3(8.0f, floorY, 8.0f),
+                            glm::vec3(-8.0f, floorY, 8.0f),
+                            glm::vec3(8.0f, floorY, -8.0f),
+                            glm::vec3(-8.0f, floorY, -8.0f)};
+                        std::vector<float> potRot = {0.0f, glm::pi<float>(), glm::radians(90.0f), glm::radians(-90.0f)};
+                        const float potScale = 4.0f;
+
+                        for (auto &pr : potted_models)
+                        {
+                            for (size_t i = 0; i < potPositions.size(); ++i)
+                            {
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, potPositions[i]);
+                                modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                                modelMat = modelMat * pr.transform;
+                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                pr.mesh->render();
+                            }
+                        }
+                    }
+
+                    // Also render picture frames into the depth cubemap (one per wall)
+                    if (!picture_models.empty())
+                    {
+                        const float pictureYOffset = 3.5f; // meters above floor to center picture
+                        const float pictureShift = 4.0f;   // slightly larger rightward shift
+                        const float wallDist = 9.8f;       // place pictures closer to wall (walls at +/-10)
+                        std::vector<glm::vec3> picPositions = {
+                            // front/back: shift along +X (right)
+                            glm::vec3(pictureShift, floorY + pictureYOffset, wallDist),   // front (moved right, closer to wall)
+                            glm::vec3(pictureShift, floorY + pictureYOffset, -wallDist),  // back (moved right, closer to wall)
+                            // left/right walls: X at wallDist, shift along +Z
+                            glm::vec3(wallDist, floorY + pictureYOffset, pictureShift),   // right wall (moved towards +Z)
+                            glm::vec3(-wallDist, floorY + pictureYOffset, pictureShift)   // left wall (moved towards +Z)
+                        };
+                        // Ensure pictures face into the room: fix rotations so no backside shows
+                        std::vector<float> picRot = {glm::pi<float>(), 0.0f, glm::radians(270.0f), glm::radians(90.0f)};
+                        const float picScale = 4.0f; // keep large scale
+                        for (auto &pr : picture_models)
+                        {
+                            for (size_t i = 0; i < picPositions.size(); ++i)
+                            {
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, picPositions[i]);
+                                modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                modelMat = glm::scale(modelMat, glm::vec3(picScale));
+                                modelMat = modelMat * pr.transform;
+                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                pr.mesh->render();
+                            }
+                        }
+                        // Render the second picture-frame variant on the opposite side of each door
+                        if (!picture2_models.empty())
+                        {
+                            std::vector<glm::vec3> pic2Positions = {
+                                glm::vec3(-pictureShift, floorY + pictureYOffset, wallDist),
+                                glm::vec3(-pictureShift, floorY + pictureYOffset, -wallDist),
+                                glm::vec3(wallDist, floorY + pictureYOffset, -pictureShift),
+                                glm::vec3(-wallDist, floorY + pictureYOffset, -pictureShift)};
+                            for (auto &pr2 : picture2_models)
+                            {
+                                for (size_t i = 0; i < pic2Positions.size(); ++i)
+                                {
+                                    glm::mat4 modelMat{1.0f};
+                                    modelMat = glm::translate(modelMat, pic2Positions[i]);
+                                    // reuse same rotation and scale as the first variant so they match
+                                    modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                    modelMat = glm::scale(modelMat, glm::vec3(picScale));
+                                    modelMat = modelMat * pr2.transform;
+                                    glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                    pr2.mesh->render();
+                                }
+                            }
+                        }
+                    }
+
                     // Also render the props into the depth cubemap so they cast shadows.
                     // Compute table height from imported_models (max of src heights)
                     float tableHeight = 0.0f;
@@ -403,6 +494,79 @@ void main(){}
                             modelMat = modelMat * r.transform;
                             glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
                             r.mesh->render();
+                        }
+                    }
+                    // Also render potted plants into spot depth so they cast shadows from spotlights
+                    if (!potted_models.empty())
+                    {
+                        std::vector<glm::vec3> potPositions = {
+                            glm::vec3(8.0f, floorY, 8.0f),
+                            glm::vec3(-8.0f, floorY, 8.0f),
+                            glm::vec3(8.0f, floorY, -8.0f),
+                            glm::vec3(-8.0f, floorY, -8.0f)};
+                        std::vector<float> potRot = {0.0f, glm::pi<float>(), glm::radians(90.0f), glm::radians(-90.0f)};
+                        const float potScale = 4.0f;
+                        for (auto &pr : potted_models)
+                        {
+                            for (size_t i = 0; i < potPositions.size(); ++i)
+                            {
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, potPositions[i]);
+                                modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                                modelMat = modelMat * pr.transform;
+                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                pr.mesh->render();
+                            }
+                        }
+                    }
+                    // Also render picture frames into spot depth so they cast spot-shadow contribution
+                    if (!picture_models.empty())
+                    {
+                        const float pictureYOffset = 3.5f;
+                        const float pictureShift = 4.0f;
+                        const float wallDist = 9.8f;
+                        std::vector<glm::vec3> picPositions = {
+                            glm::vec3(pictureShift, floorY + pictureYOffset, wallDist),
+                            glm::vec3(pictureShift, floorY + pictureYOffset, -wallDist),
+                            glm::vec3(wallDist, floorY + pictureYOffset, pictureShift),
+                            glm::vec3(-wallDist, floorY + pictureYOffset, pictureShift)};
+                        std::vector<float> picRot = {glm::pi<float>(), 0.0f, glm::radians(270.0f), glm::radians(90.0f)};
+                        const float picScale = 4.0f;
+                        for (auto &pr : picture_models)
+                        {
+                            for (size_t i = 0; i < picPositions.size(); ++i)
+                            {
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, picPositions[i]);
+                                modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                modelMat = glm::scale(modelMat, glm::vec3(picScale));
+                                modelMat = modelMat * pr.transform;
+                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                pr.mesh->render();
+                            }
+                        }
+                        // Render the second picture-frame variant mirrored on the opposite side for spot depth
+                        if (!picture2_models.empty())
+                        {
+                            std::vector<glm::vec3> pic2Positions = {
+                                glm::vec3(-pictureShift, floorY + pictureYOffset, wallDist),
+                                glm::vec3(-pictureShift, floorY + pictureYOffset, -wallDist),
+                                glm::vec3(wallDist, floorY + pictureYOffset, -pictureShift),
+                                glm::vec3(-wallDist, floorY + pictureYOffset, -pictureShift)};
+                            for (auto &pr2 : picture2_models)
+                            {
+                                for (size_t i = 0; i < pic2Positions.size(); ++i)
+                                {
+                                    glm::mat4 modelMat{1.0f};
+                                    modelMat = glm::translate(modelMat, pic2Positions[i]);
+                                    modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                    modelMat = glm::scale(modelMat, glm::vec3(picScale));
+                                    modelMat = modelMat * pr2.transform;
+                                    glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                    pr2.mesh->render();
+                                }
+                            }
                         }
                     }
                     // props
@@ -631,6 +795,122 @@ void main(){}
                         glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
 
                     pr.mesh->render();
+                }
+            }
+
+            // Render potted plants in the main spot positions (one in each corner)
+            if (!potted_models.empty())
+            {
+                std::vector<glm::vec3> potPositions = {
+                    glm::vec3(8.0f, floorY, 8.0f),
+                    glm::vec3(-8.0f, floorY, 8.0f),
+                    glm::vec3(8.0f, floorY, -8.0f),
+                    glm::vec3(-8.0f, floorY, -8.0f)};
+                std::vector<float> potRot = {0.0f, glm::pi<float>(), glm::radians(90.0f), glm::radians(-90.0f)};
+                const float potScale = 4.0f;
+
+                for (auto &pr : potted_models)
+                {
+                    for (size_t i = 0; i < potPositions.size(); ++i)
+                    {
+                        glm::mat4 modelMat{1.0f};
+                        modelMat = glm::translate(modelMat, potPositions[i]);
+                        modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                        modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                        modelMat = modelMat * pr.transform;
+
+                        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+                        if (pr.albedo)
+                            pr.albedo->use();
+                        else
+                            fallback_albedo->use();
+
+                        glActiveTexture(GL_TEXTURE1);
+                        if (pr.normal)
+                            glBindTexture(GL_TEXTURE_2D, pr.normal->get_id());
+                        else
+                            glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+
+                        pr.mesh->render();
+                    }
+                }
+            }
+
+            // Render picture frames in the main pass (one centered on each wall)
+            if (!picture_models.empty())
+            {
+                const float pictureYOffset = 3.5f;
+                const float pictureShift = 4.0f;
+                const float wallDist = 9.8f;
+                std::vector<glm::vec3> picPositions = {
+                    glm::vec3(pictureShift, floorY + pictureYOffset, wallDist),
+                    glm::vec3(pictureShift, floorY + pictureYOffset, -wallDist),
+                    glm::vec3(wallDist, floorY + pictureYOffset, pictureShift),
+                    glm::vec3(-wallDist, floorY + pictureYOffset, pictureShift)};
+                std::vector<float> picRot = {glm::pi<float>(), 0.0f, glm::radians(270.0f), glm::radians(90.0f)};
+                const float picScale = 4.0f;
+
+                for (auto &pr : picture_models)
+                {
+                    for (size_t i = 0; i < picPositions.size(); ++i)
+                    {
+                        glm::mat4 modelMat{1.0f};
+                        modelMat = glm::translate(modelMat, picPositions[i]);
+                        modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                        modelMat = glm::scale(modelMat, glm::vec3(picScale));
+                        modelMat = modelMat * pr.transform;
+
+                        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+                        if (pr.albedo)
+                            pr.albedo->use();
+                        else
+                            fallback_albedo->use();
+
+                        glActiveTexture(GL_TEXTURE1);
+                        if (pr.normal)
+                            glBindTexture(GL_TEXTURE_2D, pr.normal->get_id());
+                        else
+                            glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+
+                        pr.mesh->render();
+                    }
+                }
+                // Render the second picture-frame variant mirrored on the opposite side in the main pass
+                if (!picture2_models.empty())
+                {
+                    std::vector<glm::vec3> pic2Positions = {
+                        glm::vec3(-pictureShift, floorY + pictureYOffset, wallDist),
+                        glm::vec3(-pictureShift, floorY + pictureYOffset, -wallDist),
+                        glm::vec3(wallDist, floorY + pictureYOffset, -pictureShift),
+                        glm::vec3(-wallDist, floorY + pictureYOffset, -pictureShift)};
+                    for (auto &pr2 : picture2_models)
+                    {
+                        for (size_t i = 0; i < pic2Positions.size(); ++i)
+                        {
+                            glm::mat4 modelMat{1.0f};
+                            modelMat = glm::translate(modelMat, pic2Positions[i]);
+                            modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                            modelMat = glm::scale(modelMat, glm::vec3(picScale));
+                            modelMat = modelMat * pr2.transform;
+
+                            glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+                            if (pr2.albedo)
+                                pr2.albedo->use();
+                            else
+                                fallback_albedo->use();
+
+                            glActiveTexture(GL_TEXTURE1);
+                            if (pr2.normal)
+                                glBindTexture(GL_TEXTURE_2D, pr2.normal->get_id());
+                            else
+                                glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+
+                            pr2.mesh->render();
+                        }
+                    }
                 }
             }
         }
