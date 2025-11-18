@@ -45,6 +45,36 @@ void create_shaders_program() noexcept
     Data::shader_list.push_back(Shader::create_from_files(Data::lightbulb_vertex_shader_path, Data::lightbulb_fragment_shader_path));
 }
 
+// renderQuad() renders a 1x1 XY quad in NDC
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+void renderQuad()
+{
+    if (quadVAO == 0)
+    {
+        float quadVertices[] = {
+            // positions        // texture Coords
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        // setup plane VAO
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    }
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+}
+
 int main()
 {
     // Window dimensions
@@ -154,7 +184,7 @@ int main()
     {
         glGenTextures(1, &spotDepthMaps[i]);
         glBindTexture(GL_TEXTURE_2D, spotDepthMaps[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SPOT_SHADOW_RES, SPOT_SHADOW_RES, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 2048, 2048, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -171,6 +201,7 @@ int main()
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         {
             // Spot shadow FBO not complete (no debug output)
+            std::cerr << "Spot shadow FBO not complete!" << std::endl;
         }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         spotDepthFBOs[i] = fbo;
@@ -178,6 +209,13 @@ int main()
 
     // Depth shader for spotlights (simple depth-only shader)
     auto spotDepthShader = Shader::create_from_files(Data::root_path / "shaders" / "spot_depth.vert", Data::root_path / "shaders" / "spot_depth.frag");
+    
+    // Debug shader for quad rendering
+    auto debugDepthQuad = Shader::create_from_files(Data::root_path / "shaders" / "debug_quad.vert", Data::root_path / "shaders" / "debug_quad.frag");
+
+    // Debug mode state
+    int debugMode = 0; // 0: off, 1..5: show spot shadow map
+    bool vKeyPressed = false;
 
     // Runtime shadow controls were removed (use fixed parameters)
     const bool enableShadows = true;
@@ -228,6 +266,18 @@ int main()
             if (!lightbulbs.empty())
                 lightbulbs[0].set_position(lp);
             prevLp = lp;
+        }
+
+        // Debug toggle
+        if (keys[GLFW_KEY_V] && !vKeyPressed)
+        {
+            debugMode = (debugMode + 1) % (SPOT_COUNT + 1);
+            vKeyPressed = true;
+            std::cout << "Debug Mode: " << debugMode << std::endl;
+        }
+        if (!keys[GLFW_KEY_V])
+        {
+            vKeyPressed = false;
         }
 
         // --- Shadow pass for the single point light (skip if disabled) ---
@@ -453,14 +503,14 @@ int main()
                 glm::mat4 lightSpace = lightProj * lightView;
 
                 // Render scene depth from spotlight POV
-                glViewport(0, 0, 1024, 1024);
+                glViewport(0, 0, 2048, 2048);
                 glBindFramebuffer(GL_FRAMEBUFFER, spotDepthFBOs[si]);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 
-                // Enable face culling for the depth pass so only the side of
-                // geometry facing the light contributes to the shadow map.
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_FRONT);
+                // Disable face culling for the depth pass to ensure all geometry
+                // (regardless of winding order) is rendered into the shadow map.
+                glDisable(GL_CULL_FACE);
+                // glCullFace(GL_BACK);
 
                 spotDepthShader->use();
                 glUniformMatrix4fv(glGetUniformLocation(spotDepthShader->get_program_id(), "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpace));
@@ -930,6 +980,19 @@ int main()
         }
 
         glUseProgram(0);
+
+
+        
+        // Render debug quad on top if active
+        if (debugMode > 0)
+        {
+             debugDepthQuad->use();
+             glUniform1f(glGetUniformLocation(debugDepthQuad->get_program_id(), "near_plane"), 0.1f);
+             glUniform1f(glGetUniformLocation(debugDepthQuad->get_program_id(), "far_plane"), 25.0f); // spot far plane
+             glActiveTexture(GL_TEXTURE0);
+             glBindTexture(GL_TEXTURE_2D, spotDepthMaps[debugMode - 1]);
+             renderQuad();
+        }
 
         main_window->swap_buffers();
     }

@@ -64,7 +64,8 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 // Spot shadowing
 uniform sampler2D spotShadowMaps[NR_SPOT_LIGHTS];
 uniform mat4 spotLightSpaceMatrices[NR_SPOT_LIGHTS];
-float CalcSpotShadow(int index, vec3 fragPos);
+
+float CalcSpotShadow(int index, vec3 fragPos, vec3 normal, vec3 lightDir);
 
 // Shadow cubemap for the (single) point light
 uniform samplerCube shadowMap;
@@ -103,7 +104,8 @@ void main()
     {
         vec3 spotContribution = CalcSpotLight(spotLights[i], norm, FragPos, viewDir);
         // apply shadow for spot (always computed)
-        float sshadow = CalcSpotShadow(i, FragPos);
+        vec3 lightDir = normalize(spotLights[i].position - FragPos);
+        float sshadow = CalcSpotShadow(i, FragPos, norm, lightDir);
         result += (1.0 - sshadow) * spotContribution;
     }
 
@@ -232,7 +234,7 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     return (ambient + diffuse + specular);
 }
 
-float CalcSpotShadow(int index, vec3 fragPos)
+float CalcSpotShadow(int index, vec3 fragPos, vec3 normal, vec3 lightDir)
 {
     // Transform fragment into light clip space
     vec4 fragPosLS = spotLightSpaceMatrices[index] * vec4(fragPos, 1.0);
@@ -248,7 +250,8 @@ float CalcSpotShadow(int index, vec3 fragPos)
 
     // PCF sampling
     float shadow = 0.0;
-    float bias = 0.005;
+    // Adaptive bias based on surface angle
+    float bias = max(0.0005 * (1.0 - dot(normal, lightDir)), 0.00005);
     const int samples = 4;
     float texelSize = 1.0 / 1024.0; // matches depth map resolution in main.cpp
     for (int x = -1; x <= 1; x += 2)
