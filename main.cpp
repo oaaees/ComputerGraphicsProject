@@ -50,6 +50,9 @@ int main()
     // Window dimensions
     constexpr GLint WIDTH = 1200;
     constexpr GLint HEIGHT = 800;
+    
+    // Spotlight settings
+    const float spotOuterDeg = 40.0f;
 
     auto main_window = Window::create(WIDTH, HEIGHT, "The Room");
 
@@ -174,17 +177,7 @@ int main()
     }
 
     // Depth shader for spotlights (simple depth-only shader)
-    const std::string spotDepthVert = R"(
-#version 410
-layout (location = 0) in vec3 aPos;
-uniform mat4 lightSpaceMatrix;
-uniform mat4 model;
-void main(){ gl_Position = lightSpaceMatrix * model * vec4(aPos, 1.0); }
-)";
-    const std::string spotDepthFrag = R"(#version 410
-void main(){}
-)";
-    auto spotDepthShader = Shader::create_from_strings(spotDepthVert, spotDepthFrag);
+    auto spotDepthShader = Shader::create_from_files(Data::root_path / "shaders" / "spot_depth.vert", Data::root_path / "shaders" / "spot_depth.frag");
 
     // Runtime shadow controls were removed (use fixed parameters)
     const bool enableShadows = true;
@@ -201,6 +194,9 @@ void main(){}
 
         // Get and handle user input events
         glfwPollEvents();
+        
+        // Ensure depth testing is enabled (in case it was disabled elsewhere)
+        glEnable(GL_DEPTH_TEST);
 
         camera.handle_keys(main_window->get_keys());
         camera.handle_mouse(main_window->get_x_change(), main_window->get_y_change());
@@ -233,8 +229,6 @@ void main(){}
                 lightbulbs[0].set_position(lp);
             prevLp = lp;
         }
-
-        // (Removed runtime shadow key handlers and noisy console prints)
 
         // --- Shadow pass for the single point light (skip if disabled) ---
         if (enableShadows)
@@ -442,7 +436,7 @@ void main(){}
         {
             // We'll render from each room's ceiling downward with a perspective
             // projection matching the spot outer cone.
-            const float spotOuterDeg = 17.5f;
+            // projection matching the spot outer cone.
             const float spotFov = spotOuterDeg * 2.0f; // cover full cone
             const float near_plane_spot = 0.1f;
             const float far_plane_spot = 25.0f;
@@ -462,6 +456,12 @@ void main(){}
                 glViewport(0, 0, 1024, 1024);
                 glBindFramebuffer(GL_FRAMEBUFFER, spotDepthFBOs[si]);
                 glClear(GL_DEPTH_BUFFER_BIT);
+                
+                // Enable face culling for the depth pass so only the side of
+                // geometry facing the light contributes to the shadow map.
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_FRONT);
+
                 spotDepthShader->use();
                 glUniformMatrix4fv(glGetUniformLocation(spotDepthShader->get_program_id(), "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpace));
 
@@ -600,6 +600,10 @@ void main(){}
                     }
                 }
 
+
+
+                // Restore face culling state
+                glDisable(GL_CULL_FACE);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 // restore viewport
                 glViewport(0, 0, main_window->get_buffer_width(), main_window->get_buffer_height());
@@ -662,7 +666,7 @@ void main(){}
             glUniform3fv(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".direction").c_str()), 1, glm::value_ptr(sdir));
             // Make spotlights more visible by widening cone, increasing intensity and reducing attenuation
             glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".cutOff").c_str()), cos(glm::radians(30.0f)));
-            glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".outerCutOff").c_str()), cos(glm::radians(40.0f)));
+            glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".outerCutOff").c_str()), cos(glm::radians(spotOuterDeg)));
             glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".constant").c_str()), 1.0f);
             // Less aggressive attenuation so the spot covers more of the room
             glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), (base + ".linear").c_str()), 0.09f);
