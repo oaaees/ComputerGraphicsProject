@@ -48,32 +48,32 @@ void create_shaders_program() noexcept
 // renderQuad() renders a 1x1 XY quad in NDC
 unsigned int quadVAO = 0;
 unsigned int quadVBO;
-void renderQuad()
-{
-    if (quadVAO == 0)
-    {
-        float quadVertices[] = {
-            // positions        // texture Coords
-            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-        };
-        // setup plane VAO
-        glGenVertexArrays(1, &quadVAO);
-        glGenBuffers(1, &quadVBO);
-        glBindVertexArray(quadVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    }
-    glBindVertexArray(quadVAO);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
-}
+// void renderQuad()
+// {
+//     if (quadVAO == 0)
+//     {
+//         float quadVertices[] = {
+//             // positions        // texture Coords
+//             -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+//             -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+//              1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+//              1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+//         };
+//         // setup plane VAO
+//         glGenVertexArrays(1, &quadVAO);
+//         glGenBuffers(1, &quadVBO);
+//         glBindVertexArray(quadVAO);
+//         glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+//         glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+//         glEnableVertexAttribArray(0);
+//         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+//         glEnableVertexAttribArray(1);
+//         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+//     }
+//     glBindVertexArray(quadVAO);
+//     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+//     glBindVertexArray(0);
+// }
 
 int main()
 {
@@ -154,6 +154,16 @@ int main()
     // Load the second variant and place them on the opposite side of the door holes.
     std::vector<AssimpLoader::Renderable> picture2_models = AssimpLoader::loadModel(Data::root_path / "models" / "fancy_picture_frame_02_1k.gltf");
 
+    // Load new "big statue" models
+    std::vector<AssimpLoader::Renderable> cat_statue = AssimpLoader::loadModel(Data::root_path / "models" / "concrete_cat_statue_1k.gltf");
+    std::vector<AssimpLoader::Renderable> cannon_statue = AssimpLoader::loadModel(Data::root_path / "models" / "cannon_01_1k.gltf");
+    std::vector<AssimpLoader::Renderable> cart_statue = AssimpLoader::loadModel(Data::root_path / "models" / "CoffeeCart_01_1k.gltf");
+    std::vector<AssimpLoader::Renderable> drill_statue = AssimpLoader::loadModel(Data::root_path / "models" / "Drill_01_1k.gltf");
+    std::vector<AssimpLoader::Renderable> horse_statue = AssimpLoader::loadModel(Data::root_path / "models" / "horse_head_1k.gltf");
+    
+    // Load new potted plant for outer rooms
+    std::vector<AssimpLoader::Renderable> potted_plant_02 = AssimpLoader::loadModel(Data::root_path / "models" / "potted_plant_02_1k.gltf");
+
     // Create a single lightbulb in the middle of the ceiling (we'll shadow this one)
     std::vector<Lightbulb> lightbulbs;
     PointLight ceilingLight(glm::vec3{0.0f, 7.5f, 0.0f},
@@ -211,11 +221,12 @@ int main()
     auto spotDepthShader = Shader::create_from_files(Data::root_path / "shaders" / "spot_depth.vert", Data::root_path / "shaders" / "spot_depth.frag");
     
     // Debug shader for quad rendering
-    auto debugDepthQuad = Shader::create_from_files(Data::root_path / "shaders" / "debug_quad.vert", Data::root_path / "shaders" / "debug_quad.frag");
+    // std::shared_ptr<Shader> debugDepthQuad = Shader::create_from_files("shaders/debug_quad.vert", "shaders/debug_quad.frag");, Data::root_path / "shaders" / "debug_quad.frag");
 
     // Debug mode state
-    int debugMode = 0; // 0: off, 1..5: show spot shadow map
-    bool vKeyPressed = false;
+    // Debug mode toggle: 0=off, 1-5=show spot shadow map 1-5
+    // int debugMode = 0;
+    // bool vKeyPressed = false;
 
     // Runtime shadow controls were removed (use fixed parameters)
     const bool enableShadows = true;
@@ -269,16 +280,19 @@ int main()
         }
 
         // Debug toggle
-        if (keys[GLFW_KEY_V] && !vKeyPressed)
-        {
-            debugMode = (debugMode + 1) % (SPOT_COUNT + 1);
-            vKeyPressed = true;
-            std::cout << "Debug Mode: " << debugMode << std::endl;
-        }
-        if (!keys[GLFW_KEY_V])
-        {
-            vKeyPressed = false;
-        }
+        // if (main_window->get_key(GLFW_KEY_V) == GLFW_PRESS)
+        // {
+        //     if (!vKeyPressed)
+        //     {
+        //         debugMode = (debugMode + 1) % (SPOT_COUNT + 1);
+        //         vKeyPressed = true;
+        //         std::cout << "Debug Mode: " << debugMode << std::endl;
+        //     }
+        // }
+        // else
+        // {
+        //     vKeyPressed = false;
+        // }
 
         // --- Shadow pass for the single point light (skip if disabled) ---
         if (enableShadows)
@@ -325,10 +339,10 @@ int main()
                     const float modelScale = 2.0f;
                     const float floorY = -2.0f;
                     std::vector<glm::vec3> positions = {
-                        glm::vec3(0.0f, floorY, 6.0f),
-                        glm::vec3(0.0f, floorY, -6.0f),
-                        glm::vec3(6.0f, floorY, 0.0f),
-                        glm::vec3(-6.0f, floorY, 0.0f)};
+                        glm::vec3(0.0f, floorY, 28.5f),
+                        glm::vec3(0.0f, floorY, -28.5f),
+                        glm::vec3(28.5f, floorY, 0.0f),
+                        glm::vec3(-28.5f, floorY, 0.0f)};
                     std::vector<float> rotations = {
                         0.0f,
                         glm::pi<float>(),
@@ -474,6 +488,102 @@ int main()
                         }
                     }
                 }
+
+                // Render new "big statues" in the point shadow pass
+                const float defaultStatueScale = 12.0f;
+                const float cannonScale = 3.0f;
+                const float coffeeScale = 2.0f; 
+                const float floorY = -2.0f;
+                
+                // Cat (Center)
+                if (!cat_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 0.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                    for (auto &r : cat_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Cannon (+X)
+                if (!cannon_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(20.0f, floorY, 0.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(cannonScale));
+                    for (auto &r : cannon_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Cart (-X)
+                if (!cart_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(-20.0f, floorY, 0.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(coffeeScale));
+                    for (auto &r : cart_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Drill (+Z)
+                if (!drill_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 20.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                    for (auto &r : drill_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Horse (-Z)
+                if (!horse_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, -20.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                    for (auto &r : horse_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+
+                // Render new potted plants in outer rooms (Point Shadow Pass)
+                if (!potted_plant_02.empty()) {
+                    const float potScale = 4.0f;
+                    std::vector<glm::vec3> outerRoomCenters = {
+                        glm::vec3(20.0f, 0.0f, 0.0f),  // East
+                        glm::vec3(-20.0f, 0.0f, 0.0f), // West
+                        glm::vec3(0.0f, 0.0f, 20.0f),  // South
+                        glm::vec3(0.0f, 0.0f, -20.0f)  // North
+                    };
+                    // Offsets for 4 corners relative to room center
+                    std::vector<glm::vec3> cornerOffsets = {
+                        glm::vec3(8.0f, 0.0f, 8.0f),
+                        glm::vec3(-8.0f, 0.0f, 8.0f),
+                        glm::vec3(8.0f, 0.0f, -8.0f),
+                        glm::vec3(-8.0f, 0.0f, -8.0f)
+                    };
+
+                    for (const auto& center : outerRoomCenters) {
+                        for (const auto& offset : cornerOffsets) {
+                            glm::vec3 pos = center + offset;
+                            pos.y = floorY; // Ensure correct floor height
+                            
+                            glm::mat4 modelMat{1.0f};
+                            modelMat = glm::translate(modelMat, pos);
+                            modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                            for (auto &r : potted_plant_02) {
+                                glm::mat4 m = modelMat * r.transform;
+                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                                r.mesh->render();
+                            }
+                        }
+                    }
+                }
             }
             // Restore face culling state
             glDisable(GL_CULL_FACE);
@@ -527,10 +637,10 @@ int main()
                     const float modelScale = 2.0f;
                     const float floorY = -2.0f;
                     std::vector<glm::vec3> positions = {
-                        glm::vec3(0.0f, floorY, 6.0f),
-                        glm::vec3(0.0f, floorY, -6.0f),
-                        glm::vec3(6.0f, floorY, 0.0f),
-                        glm::vec3(-6.0f, floorY, 0.0f)};
+                        glm::vec3(0.0f, floorY, 28.5f),
+                        glm::vec3(0.0f, floorY, -28.5f),
+                        glm::vec3(28.5f, floorY, 0.0f),
+                        glm::vec3(-28.5f, floorY, 0.0f)};
                     std::vector<float> rotations = {0.0f, glm::pi<float>(), glm::radians(-90.0f), glm::radians(90.0f)};
 
                     for (auto &r : imported_models)
@@ -652,6 +762,104 @@ int main()
 
 
 
+
+
+                // Render new "big statues" in the spot shadow pass
+                const float defaultStatueScale = 12.0f;
+                const float cannonScale = 3.0f;
+                const float coffeeScale = 2.0f;
+                const float floorY = -2.0f;
+                
+                // Cat (Center)
+                if (!cat_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 0.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                    for (auto &r : cat_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Cannon (+X)
+                if (!cannon_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(20.0f, floorY, 0.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(cannonScale));
+                    for (auto &r : cannon_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Cart (-X)
+                if (!cart_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(-20.0f, floorY, 0.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(coffeeScale));
+                    for (auto &r : cart_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Drill (+Z)
+                if (!drill_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 20.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                    for (auto &r : drill_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+                // Horse (-Z)
+                if (!horse_statue.empty()) {
+                    glm::mat4 modelMat{1.0f};
+                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, -20.0f));
+                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                    for (auto &r : horse_statue) {
+                        glm::mat4 m = modelMat * r.transform;
+                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                        r.mesh->render();
+                    }
+                }
+
+                // Render new potted plants in outer rooms (Spot Shadow Pass)
+                if (!potted_plant_02.empty()) {
+                    const float potScale = 4.0f;
+                    std::vector<glm::vec3> outerRoomCenters = {
+                        glm::vec3(20.0f, 0.0f, 0.0f),  // East
+                        glm::vec3(-20.0f, 0.0f, 0.0f), // West
+                        glm::vec3(0.0f, 0.0f, 20.0f),  // South
+                        glm::vec3(0.0f, 0.0f, -20.0f)  // North
+                    };
+                    // Offsets for 4 corners relative to room center
+                    std::vector<glm::vec3> cornerOffsets = {
+                        glm::vec3(8.0f, 0.0f, 8.0f),
+                        glm::vec3(-8.0f, 0.0f, 8.0f),
+                        glm::vec3(8.0f, 0.0f, -8.0f),
+                        glm::vec3(-8.0f, 0.0f, -8.0f)
+                    };
+
+                    for (const auto& center : outerRoomCenters) {
+                        for (const auto& offset : cornerOffsets) {
+                            glm::vec3 pos = center + offset;
+                            pos.y = floorY; // Ensure correct floor height
+                            
+                            glm::mat4 modelMat{1.0f};
+                            modelMat = glm::translate(modelMat, pos);
+                            modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                            for (auto &r : potted_plant_02) {
+                                glm::mat4 m = modelMat * r.transform;
+                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                                r.mesh->render();
+                            }
+                        }
+                    }
+                }
+
                 // Restore face culling state
                 glDisable(GL_CULL_FACE);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -761,10 +969,10 @@ int main()
 
             // Positions for four tables (centered, near each wall)
             std::vector<glm::vec3> positions = {
-                glm::vec3(0.0f, floorY, 6.0f),  // front (towards +Z)
-                glm::vec3(0.0f, floorY, -6.0f), // back (towards -Z)
-                glm::vec3(6.0f, floorY, 0.0f),  // right (towards +X)
-                glm::vec3(-6.0f, floorY, 0.0f)  // left (towards -X)
+                glm::vec3(0.0f, floorY, 28.5f),  // front (towards +Z)
+                glm::vec3(0.0f, floorY, -28.5f), // back (towards -Z)
+                glm::vec3(28.5f, floorY, 0.0f),  // right (towards +X)
+                glm::vec3(-28.5f, floorY, 0.0f)  // left (towards -X)
             };
 
             std::vector<float> rotations = {
@@ -967,6 +1175,119 @@ int main()
                     }
                 }
             }
+
+            // Render new "big statues" in the main pass
+            const float defaultStatueScale = 12.0f;
+            const float cannonScale = 3.0f;
+            const float coffeeScale = 2.0f;
+            
+            // Cat (Center)
+            if (!cat_statue.empty()) {
+                glm::mat4 modelMat{1.0f};
+                modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 0.0f));
+                modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                for (auto &r : cat_statue) {
+                    glm::mat4 m = modelMat * r.transform;
+                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
+                    glActiveTexture(GL_TEXTURE1);
+                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                    r.mesh->render();
+                }
+            }
+            // Cannon (+X)
+            if (!cannon_statue.empty()) {
+                glm::mat4 modelMat{1.0f};
+                modelMat = glm::translate(modelMat, glm::vec3(20.0f, floorY, 0.0f));
+                modelMat = glm::scale(modelMat, glm::vec3(cannonScale));
+                for (auto &r : cannon_statue) {
+                    glm::mat4 m = modelMat * r.transform;
+                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
+                    glActiveTexture(GL_TEXTURE1);
+                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                    r.mesh->render();
+                }
+            }
+            // Cart (-X)
+            if (!cart_statue.empty()) {
+                glm::mat4 modelMat{1.0f};
+                modelMat = glm::translate(modelMat, glm::vec3(-20.0f, floorY, 0.0f));
+                modelMat = glm::scale(modelMat, glm::vec3(coffeeScale));
+                for (auto &r : cart_statue) {
+                    glm::mat4 m = modelMat * r.transform;
+                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
+                    glActiveTexture(GL_TEXTURE1);
+                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                    r.mesh->render();
+                }
+            }
+            // Drill (+Z)
+            if (!drill_statue.empty()) {
+                glm::mat4 modelMat{1.0f};
+                modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 20.0f));
+                modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                for (auto &r : drill_statue) {
+                    glm::mat4 m = modelMat * r.transform;
+                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
+                    glActiveTexture(GL_TEXTURE1);
+                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                    r.mesh->render();
+                }
+            }
+            // Horse (-Z)
+            if (!horse_statue.empty()) {
+                glm::mat4 modelMat{1.0f};
+                modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, -20.0f));
+                modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
+                for (auto &r : horse_statue) {
+                    glm::mat4 m = modelMat * r.transform;
+                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
+                    glActiveTexture(GL_TEXTURE1);
+                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                    r.mesh->render();
+                }
+            }
+
+            // Render new potted plants in outer rooms (Main Pass)
+            if (!potted_plant_02.empty()) {
+                const float potScale = 4.0f;
+                std::vector<glm::vec3> outerRoomCenters = {
+                    glm::vec3(20.0f, 0.0f, 0.0f),  // East
+                    glm::vec3(-20.0f, 0.0f, 0.0f), // West
+                    glm::vec3(0.0f, 0.0f, 20.0f),  // South
+                    glm::vec3(0.0f, 0.0f, -20.0f)  // North
+                };
+                // Offsets for 4 corners relative to room center
+                std::vector<glm::vec3> cornerOffsets = {
+                    glm::vec3(8.0f, 0.0f, 8.0f),
+                    glm::vec3(-8.0f, 0.0f, 8.0f),
+                    glm::vec3(8.0f, 0.0f, -8.0f),
+                    glm::vec3(-8.0f, 0.0f, -8.0f)
+                };
+
+                for (const auto& center : outerRoomCenters) {
+                    for (const auto& offset : cornerOffsets) {
+                        glm::vec3 pos = center + offset;
+                        pos.y = floorY; // Ensure correct floor height
+                        
+                        glm::mat4 modelMat{1.0f};
+                        modelMat = glm::translate(modelMat, pos);
+                        modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                        for (auto &r : potted_plant_02) {
+                            glm::mat4 m = modelMat * r.transform;
+                            glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                            if (r.albedo) r.albedo->use(); else fallback_albedo->use();
+                            glActiveTexture(GL_TEXTURE1);
+                            if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                            r.mesh->render();
+                        }
+                    }
+                }
+            }
         }
 
         // --- Render the lightbulbs ---
@@ -984,15 +1305,15 @@ int main()
 
         
         // Render debug quad on top if active
-        if (debugMode > 0)
-        {
-             debugDepthQuad->use();
-             glUniform1f(glGetUniformLocation(debugDepthQuad->get_program_id(), "near_plane"), 0.1f);
-             glUniform1f(glGetUniformLocation(debugDepthQuad->get_program_id(), "far_plane"), 25.0f); // spot far plane
-             glActiveTexture(GL_TEXTURE0);
-             glBindTexture(GL_TEXTURE_2D, spotDepthMaps[debugMode - 1]);
-             renderQuad();
-        }
+        // if (debugMode > 0)
+        // {
+        //      debugDepthQuad->use();
+        //      glUniform1f(glGetUniformLocation(debugDepthQuad->get_program_id(), "near_plane"), 0.1f);
+        //      glUniform1f(glGetUniformLocation(debugDepthQuad->get_program_id(), "far_plane"), 25.0f); // spot far plane
+        //      glActiveTexture(GL_TEXTURE0);
+        //      glBindTexture(GL_TEXTURE_2D, spotDepthMaps[debugMode - 1]);
+        //      renderQuad();
+        // }
 
         main_window->swap_buffers();
     }
