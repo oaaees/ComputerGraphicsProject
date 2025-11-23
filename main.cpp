@@ -19,6 +19,7 @@
 #include <Texture.hpp>
 #include <ShadowCubemap.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <Frustum.hpp>
 
 namespace fs = std::filesystem;
 
@@ -43,6 +44,135 @@ void create_shaders_program() noexcept
 {
     Data::shader_list.push_back(Shader::create_from_files(Data::vertex_shader_path, Data::fragment_shader_path));
     Data::shader_list.push_back(Shader::create_from_files(Data::lightbulb_vertex_shader_path, Data::lightbulb_fragment_shader_path));
+}
+
+void UIResponsiveWhileLoading(std::shared_ptr<Window> window) noexcept
+{
+    // Poll for and process events to keep the window responsive
+    glfwPollEvents();
+    // Optionally, you can also clear the color and depth buffers to avoid
+    // displaying a frozen frame while loading.
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // Swap buffers to display the cleared frame
+    window->swap_buffers();
+}
+
+void placeModelInPosition(std::vector<AssimpLoader::Renderable> model, glm::vec3 vec3, bool cullingEnabled, Frustum frustum, float radius, float scale, std::shared_ptr<Texture> fallback_albedo, std::shared_ptr<Texture> fallback_normal) noexcept
+{
+    glm::vec3 statuePos = vec3;
+    if (!cullingEnabled || frustum.isSphereInFrustum(statuePos, radius))
+    {
+        glm::mat4 modelMat{1.0f};
+        modelMat = glm::translate(modelMat, statuePos);
+        modelMat = glm::scale(modelMat, glm::vec3(scale));
+        for (auto &r : model)
+        {
+            glm::mat4 m = modelMat * r.transform;
+            glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+            if (r.albedo)
+                r.albedo->use();
+            else
+                fallback_albedo->use();
+            glActiveTexture(GL_TEXTURE1);
+            if (r.normal)
+                glBindTexture(GL_TEXTURE_2D, r.normal->get_id());
+            else
+                glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+            r.mesh->render();
+        }
+    }
+}
+
+void placeModelInPosition(std::vector<AssimpLoader::Renderable> models, std::vector<glm::vec3> positions, std::vector<float> rot, bool cullingEnabled, Frustum frustum, float radius, float scale, std::shared_ptr<Texture> fallback_albedo, std::shared_ptr<Texture> fallback_normal) noexcept
+{
+    for (auto &pr : models)
+    {
+        for (size_t i = 0; i < positions.size(); ++i)
+        {
+            if (!cullingEnabled || frustum.isSphereInFrustum(positions[i], radius))
+            {
+                glm::mat4 modelMat{1.0f};
+                modelMat = glm::translate(modelMat, positions[i]);
+                modelMat = glm::rotate(modelMat, rot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                modelMat = glm::scale(modelMat, glm::vec3(scale));
+                modelMat = modelMat * pr.transform;
+
+                glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+                if (pr.albedo)
+                    pr.albedo->use();
+                else
+                    fallback_albedo->use();
+
+                glActiveTexture(GL_TEXTURE1);
+                if (pr.normal)
+                    glBindTexture(GL_TEXTURE_2D, pr.normal->get_id());
+                else
+                    glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+
+                pr.mesh->render();
+            }
+        }
+    }
+}
+
+void renderModelSpotShadow(std::vector<AssimpLoader::Renderable> model, glm::vec3 vec3, glm::vec3 spos, float far_plane_spot, bool cullingEnabled, Frustum frustum, float radius, float scale, std::shared_ptr<Shader> spotDepthShader) noexcept
+{
+    glm::vec3 statuePos = vec3;
+    if (glm::length(statuePos - spos) > far_plane_spot + 5.0f)
+    {
+        // too far
+    }
+    else if (!cullingEnabled || frustum.isSphereInFrustum(statuePos, radius))
+    {
+        glm::mat4 modelMat{1.0f};
+        modelMat = glm::translate(modelMat, statuePos);
+        modelMat = glm::scale(modelMat, glm::vec3(scale));
+        for (auto &r : model)
+        {
+            glm::mat4 m = modelMat * r.transform;
+            glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+            r.mesh->render();
+        }
+    }
+}
+
+void renderModelPointShadow(std::vector<AssimpLoader::Renderable> model, glm::vec3 vec3, bool cullingEnabled, Frustum frustum, float radius, float scale, std::shared_ptr<Shader> shader) noexcept
+{
+    glm::vec3 statuePos = vec3;
+    if (!cullingEnabled || frustum.isSphereInFrustum(statuePos, radius))
+    {
+        glm::mat4 modelMat{1.0f};
+        modelMat = glm::translate(modelMat, statuePos);
+        modelMat = glm::scale(modelMat, glm::vec3(scale));
+        for (auto &r : model)
+        {
+            glm::mat4 m = modelMat * r.transform;
+            glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+            r.mesh->render();
+        }
+    }
+}
+
+void renderModelSpotShadow(std::vector<AssimpLoader::Renderable> models, std::vector<glm::vec3> positions, std::vector<float> rot, bool cullingEnabled, Frustum frustum, float radius, float scale, std::shared_ptr<Shader> shader) noexcept
+{
+    for (auto &pr : models)
+    {
+        for (size_t i = 0; i < positions.size(); ++i)
+        {
+            // Frustum culling para cuadros en spot shadow pass
+            if (!cullingEnabled || frustum.isSphereInFrustum(positions[i], radius))
+            {
+                glm::mat4 modelMat{1.0f};
+                modelMat = glm::translate(modelMat, positions[i]);
+                modelMat = glm::rotate(modelMat, rot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                modelMat = glm::scale(modelMat, glm::vec3(scale));
+                modelMat = modelMat * pr.transform;
+                glUniformMatrix4fv(shader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                pr.mesh->render();
+            }
+        }
+    }
 }
 
 // renderQuad() renders a 1x1 XY quad in NDC
@@ -80,7 +210,7 @@ int main()
     // Window dimensions
     constexpr GLint WIDTH = 1200;
     constexpr GLint HEIGHT = 800;
-    
+
     // Spotlight settings
     const float spotOuterDeg = 40.0f;
 
@@ -92,6 +222,10 @@ int main()
     }
 
     create_shaders_program();
+
+    // --- FRUSTUM CULLING VARIABLES ---
+    Frustum frustum;
+    bool cullingEnabled = true; // Frustum culling siempre activado
 
     // Place camera inside the room
     Camera camera{glm::vec3{0.f, 1.f, 0.f}, glm::vec3{0.f, 1.f, 0.f}, -90.f, 0.f, 5.f, 0.15f};
@@ -130,7 +264,10 @@ int main()
     fallback_normal->load();
 
     // Load a simple test model (wooden_table_02_1k.gltf) using the Assimp loader
+    std::cout << "Loading: wooden_table_02_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> imported_models = AssimpLoader::loadModel(Data::root_path / "models" / "wooden_table_02_1k.gltf");
+    // keep UI responsive while loading
+    UIResponsiveWhileLoading(main_window);
 
     // Load props (one model per table). Expect these files to exist in models/
     std::vector<std::vector<AssimpLoader::Renderable>> prop_models;
@@ -143,26 +280,52 @@ int main()
     {
         auto group = AssimpLoader::loadModel(Data::root_path / "models" / pf);
         prop_models.push_back(std::move(group));
+
+        UIResponsiveWhileLoading(main_window);
     }
 
     // Load potted plant model (one to place in each corner). If the file
     // doesn't exist or fails to load, AssimpLoader::loadModel returns empty
     // and the code below will simply skip rendering them.
+    std::cout << "Loading: potted_plant_01_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> potted_models = AssimpLoader::loadModel(Data::root_path / "models" / "potted_plant_01_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
+
     // Load picture frames to place on the walls. If missing, loader returns empty and they are skipped.
+    std::cout << "Loading: fancy_picture_frame_01_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> picture_models = AssimpLoader::loadModel(Data::root_path / "models" / "fancy_picture_frame_01_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
+
     // Load the second variant and place them on the opposite side of the door holes.
+    std::cout << "Loading: fancy_picture_frame_02_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> picture2_models = AssimpLoader::loadModel(Data::root_path / "models" / "fancy_picture_frame_02_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
 
     // Load new "big statue" models
+    std::cout << "Loading: concrete_cat_statue_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> cat_statue = AssimpLoader::loadModel(Data::root_path / "models" / "concrete_cat_statue_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
+
+    std::cout << "Loading: cannon_01_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> cannon_statue = AssimpLoader::loadModel(Data::root_path / "models" / "cannon_01_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
+
+    std::cout << "Loading: CoffeeCart_01_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> cart_statue = AssimpLoader::loadModel(Data::root_path / "models" / "CoffeeCart_01_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
+
+    std::cout << "Loading: Drill_01_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> drill_statue = AssimpLoader::loadModel(Data::root_path / "models" / "Drill_01_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
+
+    std::cout << "Loading: horse_head_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> horse_statue = AssimpLoader::loadModel(Data::root_path / "models" / "horse_head_1k.gltf");
-    
+    UIResponsiveWhileLoading(main_window);
+
     // Load new potted plant for outer rooms
+    std::cout << "Loading: potted_plant_02_1k.gltf" << std::endl;
     std::vector<AssimpLoader::Renderable> potted_plant_02 = AssimpLoader::loadModel(Data::root_path / "models" / "potted_plant_02_1k.gltf");
+    UIResponsiveWhileLoading(main_window);
 
     // Create a single lightbulb in the middle of the ceiling (we'll shadow this one)
     std::vector<Lightbulb> lightbulbs;
@@ -171,9 +334,9 @@ int main()
                             1.0f, 0.09f, 0.032f);
     lightbulbs.emplace_back(ceilingLight, glm::vec3{1.0f, 1.0f, 1.0f});
 
-    // Shadow cubemap for the ceiling bulb (resolution, far plane tuned to scene)
-    unsigned int SHADOW_SIZE = 2048;
-    const float SHADOW_FAR = 25.0f;
+    // OPTIMIZACIÓN: Reducir resoluciones de shadow maps
+    unsigned int SHADOW_SIZE = 2048; // Reducido a 256 para menor coste
+    const float SHADOW_FAR = 20.0f;  // Distancia máxima para shadow cubemap
     // Ensure no textures are bound to any unit (prevents sampler validation warnings)
     for (int i = 0; i < 8; ++i)
     {
@@ -187,14 +350,14 @@ int main()
 
     // --- Spot shadow maps (one per room) ---
     const int SPOT_COUNT = 5;
-    const unsigned int SPOT_SHADOW_RES = 1024;
+    const unsigned int SPOT_SHADOW_RES = 2048; // Reducido a 256 para menor coste
     std::vector<GLuint> spotDepthMaps(SPOT_COUNT, 0);
     std::vector<GLuint> spotDepthFBOs(SPOT_COUNT, 0);
     for (int i = 0; i < SPOT_COUNT; ++i)
     {
         glGenTextures(1, &spotDepthMaps[i]);
         glBindTexture(GL_TEXTURE_2D, spotDepthMaps[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 2048, 2048, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SPOT_SHADOW_RES, SPOT_SHADOW_RES, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -219,7 +382,7 @@ int main()
 
     // Depth shader for spotlights (simple depth-only shader)
     auto spotDepthShader = Shader::create_from_files(Data::root_path / "shaders" / "spot_depth.vert", Data::root_path / "shaders" / "spot_depth.frag");
-    
+
     // Debug shader for quad rendering
     // std::shared_ptr<Shader> debugDepthQuad = Shader::create_from_files("shaders/debug_quad.vert", "shaders/debug_quad.frag");, Data::root_path / "shaders" / "debug_quad.frag");
 
@@ -235,6 +398,10 @@ int main()
 
     GLfloat last_time = glfwGetTime();
 
+    // OPTIMIZACIÓN: Contador para actualizar shadows periódicamente
+    static int shadowUpdateCounter = 0;
+    const int SHADOW_UPDATE_INTERVAL = 6; // Actualizar shadows cada 6 frames (reduce carga)
+
     while (!main_window->should_be_closed())
     {
         GLfloat now = glfwGetTime();
@@ -243,7 +410,12 @@ int main()
 
         // Get and handle user input events
         glfwPollEvents();
-        
+
+        // --- FRUSTUM CULLING UPDATE ---
+        glm::mat4 view = camera.get_view_matrix();
+        glm::mat4 viewProj = projection * view;
+        frustum.update(viewProj);
+
         // Ensure depth testing is enabled (in case it was disabled elsewhere)
         glEnable(GL_DEPTH_TEST);
 
@@ -294,8 +466,12 @@ int main()
         //     vKeyPressed = false;
         // }
 
+        // OPTIMIZACIÓN: Actualizar shadows solo cada SHADOW_UPDATE_INTERVAL frames
+        bool updateShadowsThisFrame = (shadowUpdateCounter % SHADOW_UPDATE_INTERVAL == 0);
+        shadowUpdateCounter++;
+
         // --- Shadow pass for the single point light (skip if disabled) ---
-        if (enableShadows)
+        if (enableShadows && updateShadowsThisFrame)
         {
             glm::vec3 light_pos = ceilingLight.get_position();
             depthShader->use();
@@ -324,12 +500,19 @@ int main()
                 glUniform3fv(glGetUniformLocation(depthShader->get_program_id(), "lightPos"), 1, glm::value_ptr(light_pos));
                 glUniform1f(glGetUniformLocation(depthShader->get_program_id(), "far_plane"), SHADOW_FAR);
 
-                // Render scene geometry for depth
+                // Render scene geometry for depth with FRUSTUM CULLING
                 // Rooms (render only shadow-casting parts so walls/floor cast
                 // shadows but duplicated back-faces do not write depth).
                 for (size_t ri = 0; ri < rooms.size() && ri < roomTransforms.size(); ++ri)
                 {
-                    rooms[ri].render_for_depth(depthShader, roomTransforms[ri]);
+                    // Frustum culling para shadow pass de habitaciones
+                    glm::vec3 roomCenter = glm::vec3(roomTransforms[ri] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+                    float roomRadius = 15.0f;
+
+                    if (frustum.isSphereInFrustum(roomCenter, roomRadius))
+                    {
+                        rooms[ri].render_for_depth(depthShader, roomTransforms[ri]);
+                    }
                 }
                 // Imported models
                 if (!imported_models.empty())
@@ -353,13 +536,24 @@ int main()
                     {
                         for (size_t i = 0; i < positions.size(); ++i)
                         {
-                            glm::mat4 modelMat{1.0f};
-                            modelMat = glm::translate(modelMat, positions[i]);
-                            modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                            modelMat = glm::scale(modelMat, glm::vec3(modelScale));
-                            modelMat = modelMat * r.transform;
-                            glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                            r.mesh->render();
+                            // Frustum culling para mesas en shadow pass
+                            glm::vec3 tablePos = positions[i];
+                            float tableRadius = 5.0f;
+                            // Skip expensive shadow draw if object is far from light
+                            float distToLight = glm::length(tablePos - light_pos);
+                            if (distToLight > SHADOW_FAR + 5.0f)
+                                continue; // fuera de rango del cubemap
+
+                            if (!cullingEnabled || frustum.isSphereInFrustum(tablePos, tableRadius))
+                            {
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, positions[i]);
+                                modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                modelMat = glm::scale(modelMat, glm::vec3(modelScale));
+                                modelMat = modelMat * r.transform;
+                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                r.mesh->render();
+                            }
                         }
                     }
 
@@ -379,13 +573,21 @@ int main()
                         {
                             for (size_t i = 0; i < potPositions.size(); ++i)
                             {
-                                glm::mat4 modelMat{1.0f};
-                                modelMat = glm::translate(modelMat, potPositions[i]);
-                                modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                                modelMat = glm::scale(modelMat, glm::vec3(potScale));
-                                modelMat = modelMat * pr.transform;
-                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                                pr.mesh->render();
+                                // Frustum culling para plantas
+                                if (!cullingEnabled || frustum.isSphereInFrustum(potPositions[i], 2.0f))
+                                {
+                                    // Skip if far from point light
+                                    float dist = glm::length(potPositions[i] - light_pos);
+                                    if (dist > SHADOW_FAR + 5.0f)
+                                        continue;
+                                    glm::mat4 modelMat{1.0f};
+                                    modelMat = glm::translate(modelMat, potPositions[i]);
+                                    modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                    modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                                    modelMat = modelMat * pr.transform;
+                                    glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                    pr.mesh->render();
+                                }
                             }
                         }
                     }
@@ -398,28 +600,18 @@ int main()
                         const float wallDist = 9.8f;       // place pictures closer to wall (walls at +/-10)
                         std::vector<glm::vec3> picPositions = {
                             // front/back: shift along +X (right)
-                            glm::vec3(pictureShift, floorY + pictureYOffset, wallDist),   // front (moved right, closer to wall)
-                            glm::vec3(pictureShift, floorY + pictureYOffset, -wallDist),  // back (moved right, closer to wall)
+                            glm::vec3(pictureShift, floorY + pictureYOffset, wallDist),  // front (moved right, closer to wall)
+                            glm::vec3(pictureShift, floorY + pictureYOffset, -wallDist), // back (moved right, closer to wall)
                             // left/right walls: X at wallDist, shift along +Z
-                            glm::vec3(wallDist, floorY + pictureYOffset, pictureShift),   // right wall (moved towards +Z)
-                            glm::vec3(-wallDist, floorY + pictureYOffset, pictureShift)   // left wall (moved towards +Z)
+                            glm::vec3(wallDist, floorY + pictureYOffset, pictureShift), // right wall (moved towards +Z)
+                            glm::vec3(-wallDist, floorY + pictureYOffset, pictureShift) // left wall (moved towards +Z)
                         };
                         // Ensure pictures face into the room: fix rotations so no backside shows
                         std::vector<float> picRot = {glm::pi<float>(), 0.0f, glm::radians(270.0f), glm::radians(90.0f)};
                         const float picScale = 4.0f; // keep large scale
-                        for (auto &pr : picture_models)
-                        {
-                            for (size_t i = 0; i < picPositions.size(); ++i)
-                            {
-                                glm::mat4 modelMat{1.0f};
-                                modelMat = glm::translate(modelMat, picPositions[i]);
-                                modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                                modelMat = glm::scale(modelMat, glm::vec3(picScale));
-                                modelMat = modelMat * pr.transform;
-                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                                pr.mesh->render();
-                            }
-                        }
+
+                        renderModelSpotShadow(picture_models, picPositions, picRot, cullingEnabled, frustum, 2.0f, picScale, depthShader);
+
                         // Render the second picture-frame variant on the opposite side of each door
                         if (!picture2_models.empty())
                         {
@@ -428,20 +620,8 @@ int main()
                                 glm::vec3(-pictureShift, floorY + pictureYOffset, -wallDist),
                                 glm::vec3(wallDist, floorY + pictureYOffset, -pictureShift),
                                 glm::vec3(-wallDist, floorY + pictureYOffset, -pictureShift)};
-                            for (auto &pr2 : picture2_models)
-                            {
-                                for (size_t i = 0; i < pic2Positions.size(); ++i)
-                                {
-                                    glm::mat4 modelMat{1.0f};
-                                    modelMat = glm::translate(modelMat, pic2Positions[i]);
-                                    // reuse same rotation and scale as the first variant so they match
-                                    modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                                    modelMat = glm::scale(modelMat, glm::vec3(picScale));
-                                    modelMat = modelMat * pr2.transform;
-                                    glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                                    pr2.mesh->render();
-                                }
-                            }
+
+                            renderModelSpotShadow(picture2_models, pic2Positions, picRot, cullingEnabled, frustum, 2.0f, picScale, depthShader);
                         }
                     }
 
@@ -465,94 +645,69 @@ int main()
                         basePos.y = floorY + tableHeight + 0.02f; // small epsilon above table
                         for (auto &pr : group)
                         {
-                            // compute source bbox and center
+                            // Frustum culling para props
+                            if (!cullingEnabled || frustum.isSphereInFrustum(basePos, 1.0f))
+                            {
+                                // compute source bbox and center
 
-                            glm::vec3 srcSize = pr.src_max - pr.src_min;
-                            glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
-                            // use X and Z for footprint; allow per-prop footprint tuning
-                            float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
-                            float target = (i < perPropFootprint.size()) ? perPropFootprint[i] : 0.6f;
-                            float scaleUniform = target / footprintDim;
-                            scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
+                                glm::vec3 srcSize = pr.src_max - pr.src_min;
+                                glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
+                                // use X and Z for footprint; allow per-prop footprint tuning
+                                float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
+                                float target = (i < perPropFootprint.size()) ? perPropFootprint[i] : 0.6f;
+                                float scaleUniform = target / footprintDim;
+                                scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
 
-                            // Build model matrix: translate to table top, scale, apply loader transform and center horizontally
-                            glm::mat4 modelMat{1.0f};
-                            modelMat = glm::translate(modelMat, basePos);
-                            modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
-                            // apply loader's transform (aligns minY to 0). Center only X/Z (avoid changing Y placement due to centering)
-                            glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
-                            modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
+                                // Build model matrix: translate to table top, scale, apply loader transform and center horizontally
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, basePos);
+                                modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
+                                // apply loader's transform (aligns minY to 0). Center only X/Z (avoid changing Y placement due to centering)
+                                glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
+                                modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
 
-                            glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                            pr.mesh->render();
+                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                pr.mesh->render();
+                            }
                         }
                     }
                 }
 
-                // Render new "big statues" in the point shadow pass
+                // Render new "big statues" in the point shadow pass with FRUSTUM CULLING
                 const float defaultStatueScale = 12.0f;
                 const float cannonScale = 3.0f;
-                const float coffeeScale = 2.0f; 
+                const float coffeeScale = 2.0f;
                 const float floorY = -2.0f;
-                
+
                 // Cat (Center)
-                if (!cat_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 0.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                    for (auto &r : cat_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!cat_statue.empty())
+                {
+                    renderModelPointShadow(cat_statue, glm::vec3(0.0f, floorY, 0.0f), cullingEnabled, frustum, 8.0f, defaultStatueScale, depthShader);
                 }
                 // Cannon (+X)
-                if (!cannon_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(20.0f, floorY, 0.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(cannonScale));
-                    for (auto &r : cannon_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!cannon_statue.empty())
+                {
+                    renderModelPointShadow(cannon_statue, glm::vec3(20.0f, floorY, 0.0f), cullingEnabled, frustum, 5.0f, cannonScale, depthShader);
                 }
                 // Cart (-X)
-                if (!cart_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(-20.0f, floorY, 0.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(coffeeScale));
-                    for (auto &r : cart_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!cart_statue.empty())
+                {
+                    renderModelPointShadow(cart_statue, glm::vec3(-20.0f, floorY, 0.0f), cullingEnabled, frustum, 4.0f, coffeeScale, depthShader);
                 }
                 // Drill (+Z)
-                if (!drill_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 20.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                    for (auto &r : drill_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!drill_statue.empty())
+                {
+                    renderModelPointShadow(drill_statue, glm::vec3(0.0f, floorY, 20.0f), cullingEnabled, frustum, 8.0f, defaultStatueScale, depthShader);
                 }
                 // Horse (-Z)
-                if (!horse_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, -20.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                    for (auto &r : horse_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!horse_statue.empty())
+                {
+                    renderModelPointShadow(horse_statue, glm::vec3(0.0f, floorY, -20.0f), cullingEnabled, frustum, 8.0f, defaultStatueScale, depthShader);
                 }
 
-                // Render new potted plants in outer rooms (Point Shadow Pass)
-                if (!potted_plant_02.empty()) {
+                // Render new potted plants in outer rooms (Point Shadow Pass) with FRUSTUM CULLING
+                if (!potted_plant_02.empty())
+                {
                     const float potScale = 4.0f;
                     std::vector<glm::vec3> outerRoomCenters = {
                         glm::vec3(20.0f, 0.0f, 0.0f),  // East
@@ -565,21 +720,27 @@ int main()
                         glm::vec3(8.0f, 0.0f, 8.0f),
                         glm::vec3(-8.0f, 0.0f, 8.0f),
                         glm::vec3(8.0f, 0.0f, -8.0f),
-                        glm::vec3(-8.0f, 0.0f, -8.0f)
-                    };
+                        glm::vec3(-8.0f, 0.0f, -8.0f)};
 
-                    for (const auto& center : outerRoomCenters) {
-                        for (const auto& offset : cornerOffsets) {
+                    for (const auto &center : outerRoomCenters)
+                    {
+                        for (const auto &offset : cornerOffsets)
+                        {
                             glm::vec3 pos = center + offset;
                             pos.y = floorY; // Ensure correct floor height
-                            
-                            glm::mat4 modelMat{1.0f};
-                            modelMat = glm::translate(modelMat, pos);
-                            modelMat = glm::scale(modelMat, glm::vec3(potScale));
-                            for (auto &r : potted_plant_02) {
-                                glm::mat4 m = modelMat * r.transform;
-                                glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                                r.mesh->render();
+
+                            // Frustum culling para plantas exteriores
+                            if (!cullingEnabled || frustum.isSphereInFrustum(pos, 2.0f))
+                            {
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, pos);
+                                modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                                for (auto &r : potted_plant_02)
+                                {
+                                    glm::mat4 m = modelMat * r.transform;
+                                    glUniformMatrix4fv(depthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
+                                    r.mesh->render();
+                                }
                             }
                         }
                     }
@@ -593,6 +754,7 @@ int main()
         }
 
         // --- Spot shadow pass: render each spotlight's depth map ---
+        if (enableShadows && updateShadowsThisFrame)
         {
             // We'll render from each room's ceiling downward with a perspective
             // projection matching the spot outer cone.
@@ -613,10 +775,11 @@ int main()
                 glm::mat4 lightSpace = lightProj * lightView;
 
                 // Render scene depth from spotlight POV
-                glViewport(0, 0, 2048, 2048);
+                // OPTIMIZACIÓN: Usar resolución reducida
+                glViewport(0, 0, SPOT_SHADOW_RES, SPOT_SHADOW_RES);
                 glBindFramebuffer(GL_FRAMEBUFFER, spotDepthFBOs[si]);
                 glClear(GL_DEPTH_BUFFER_BIT);
-                
+
                 // Disable face culling for the depth pass to ensure all geometry
                 // (regardless of winding order) is rendered into the shadow map.
                 glDisable(GL_CULL_FACE);
@@ -625,13 +788,20 @@ int main()
                 spotDepthShader->use();
                 glUniformMatrix4fv(glGetUniformLocation(spotDepthShader->get_program_id(), "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpace));
 
-                // Render rooms (shadow-caster geometry)
+                // Render rooms (shadow-caster geometry) with FRUSTUM CULLING
                 for (size_t ri = 0; ri < rooms.size() && ri < roomTransforms.size(); ++ri)
                 {
-                    rooms[ri].render_for_depth(spotDepthShader, roomTransforms[ri]);
+                    // Frustum culling para spot shadow pass
+                    glm::vec3 roomCenter = glm::vec3(roomTransforms[ri] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+                    float roomRadius = 15.0f;
+
+                    if (frustum.isSphereInFrustum(roomCenter, roomRadius))
+                    {
+                        rooms[ri].render_for_depth(spotDepthShader, roomTransforms[ri]);
+                    }
                 }
 
-                // Render imported models and props into spot depth
+                // Render imported models and props into spot depth with FRUSTUM CULLING
                 if (!imported_models.empty())
                 {
                     const float modelScale = 2.0f;
@@ -647,13 +817,30 @@ int main()
                     {
                         for (size_t i = 0; i < positions.size(); ++i)
                         {
-                            glm::mat4 modelMat{1.0f};
-                            modelMat = glm::translate(modelMat, positions[i]);
-                            modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                            modelMat = glm::scale(modelMat, glm::vec3(modelScale));
-                            modelMat = modelMat * r.transform;
-                            glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                            r.mesh->render();
+                            // Frustum culling para mesas en spot shadow pass
+                            glm::vec3 tablePos = positions[i];
+                            float tableRadius = 5.0f;
+                            // Skip if far from spotlight origin
+                            float distToSpot = glm::length(tablePos - spos);
+                            if (distToSpot > far_plane_spot + 5.0f)
+                                continue;
+                            // Also skip if outside of spotlight cone by angle
+                            glm::vec3 toObj = glm::normalize(tablePos - spos);
+                            glm::vec3 spotDir = glm::normalize(sdir);
+                            float angleDeg = glm::degrees(acos(glm::clamp(glm::dot(spotDir, toObj), -1.0f, 1.0f)));
+                            if (angleDeg > (spotOuterDeg * 1.2f))
+                                continue; // margen extra
+
+                            if (!cullingEnabled || frustum.isSphereInFrustum(tablePos, tableRadius))
+                            {
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, positions[i]);
+                                modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                modelMat = glm::scale(modelMat, glm::vec3(modelScale));
+                                modelMat = modelMat * r.transform;
+                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                r.mesh->render();
+                            }
                         }
                     }
                     // Also render potted plants into spot depth so they cast shadows from spotlights
@@ -670,13 +857,21 @@ int main()
                         {
                             for (size_t i = 0; i < potPositions.size(); ++i)
                             {
-                                glm::mat4 modelMat{1.0f};
-                                modelMat = glm::translate(modelMat, potPositions[i]);
-                                modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                                modelMat = glm::scale(modelMat, glm::vec3(potScale));
-                                modelMat = modelMat * pr.transform;
-                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                                pr.mesh->render();
+                                // Frustum culling para plantas en spot shadow pass
+                                if (!cullingEnabled || frustum.isSphereInFrustum(potPositions[i], 2.0f))
+                                {
+                                    // Skip if far from spotlight origin
+                                    float dist = glm::length(potPositions[i] - spos);
+                                    if (dist > far_plane_spot + 5.0f)
+                                        continue;
+                                    glm::mat4 modelMat{1.0f};
+                                    modelMat = glm::translate(modelMat, potPositions[i]);
+                                    modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
+                                    modelMat = glm::scale(modelMat, glm::vec3(potScale));
+                                    modelMat = modelMat * pr.transform;
+                                    glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                    pr.mesh->render();
+                                }
                             }
                         }
                     }
@@ -693,19 +888,9 @@ int main()
                             glm::vec3(-wallDist, floorY + pictureYOffset, pictureShift)};
                         std::vector<float> picRot = {glm::pi<float>(), 0.0f, glm::radians(270.0f), glm::radians(90.0f)};
                         const float picScale = 4.0f;
-                        for (auto &pr : picture_models)
-                        {
-                            for (size_t i = 0; i < picPositions.size(); ++i)
-                            {
-                                glm::mat4 modelMat{1.0f};
-                                modelMat = glm::translate(modelMat, picPositions[i]);
-                                modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                                modelMat = glm::scale(modelMat, glm::vec3(picScale));
-                                modelMat = modelMat * pr.transform;
-                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                                pr.mesh->render();
-                            }
-                        }
+
+                        renderModelSpotShadow(picture_models, picPositions, picRot, cullingEnabled, frustum, 2.0f, picScale, spotDepthShader);
+
                         // Render the second picture-frame variant mirrored on the opposite side for spot depth
                         if (!picture2_models.empty())
                         {
@@ -714,19 +899,8 @@ int main()
                                 glm::vec3(-pictureShift, floorY + pictureYOffset, -wallDist),
                                 glm::vec3(wallDist, floorY + pictureYOffset, -pictureShift),
                                 glm::vec3(-wallDist, floorY + pictureYOffset, -pictureShift)};
-                            for (auto &pr2 : picture2_models)
-                            {
-                                for (size_t i = 0; i < pic2Positions.size(); ++i)
-                                {
-                                    glm::mat4 modelMat{1.0f};
-                                    modelMat = glm::translate(modelMat, pic2Positions[i]);
-                                    modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                                    modelMat = glm::scale(modelMat, glm::vec3(picScale));
-                                    modelMat = modelMat * pr2.transform;
-                                    glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                                    pr2.mesh->render();
-                                }
-                            }
+
+                            renderModelSpotShadow(picture2_models, pic2Positions, picRot, cullingEnabled, frustum, 2.0f, picScale, spotDepthShader);
                         }
                     }
                     // props
@@ -743,91 +917,62 @@ int main()
                         basePos.y = floorY + tableHeight + 0.02f;
                         for (auto &pr : group)
                         {
-                            glm::vec3 srcSize = pr.src_max - pr.src_min;
-                            glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
-                            float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
-                            float target = (i < perPropFootprint.size()) ? perPropFootprint[i] : 0.6f;
-                            float scaleUniform = target / footprintDim;
-                            scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
-                            glm::mat4 modelMat{1.0f};
-                            modelMat = glm::translate(modelMat, basePos);
-                            modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
-                            glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
-                            modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
-                            glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-                            pr.mesh->render();
+                            // Frustum culling para props en spot shadow pass
+                            if (!cullingEnabled || frustum.isSphereInFrustum(basePos, 1.0f))
+                            {
+                                glm::vec3 srcSize = pr.src_max - pr.src_min;
+                                glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
+                                float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
+                                float target = (i < perPropFootprint.size()) ? perPropFootprint[i] : 0.6f;
+                                float scaleUniform = target / footprintDim;
+                                scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
+                                glm::mat4 modelMat{1.0f};
+                                modelMat = glm::translate(modelMat, basePos);
+                                modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
+                                glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
+                                modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
+                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                                pr.mesh->render();
+                            }
                         }
                     }
                 }
 
-
-
-
-
-                // Render new "big statues" in the spot shadow pass
+                // Render new "big statues" in the spot shadow pass with FRUSTUM CULLING
                 const float defaultStatueScale = 12.0f;
                 const float cannonScale = 3.0f;
                 const float coffeeScale = 2.0f;
                 const float floorY = -2.0f;
-                
+
                 // Cat (Center)
-                if (!cat_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 0.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                    for (auto &r : cat_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!cat_statue.empty())
+                {
+                    renderModelSpotShadow(cat_statue, glm::vec3(0.0f, floorY, 0.0f), spos, far_plane_spot, cullingEnabled, frustum, 8.0f, defaultStatueScale, spotDepthShader);
                 }
                 // Cannon (+X)
-                if (!cannon_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(20.0f, floorY, 0.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(cannonScale));
-                    for (auto &r : cannon_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!cannon_statue.empty())
+                {
+                    renderModelSpotShadow(cannon_statue, glm::vec3(20.0f, floorY, 0.0f), spos, far_plane_spot, cullingEnabled, frustum, 5.0f, cannonScale, spotDepthShader);
                 }
                 // Cart (-X)
-                if (!cart_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(-20.0f, floorY, 0.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(coffeeScale));
-                    for (auto &r : cart_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!cart_statue.empty())
+                {
+                    renderModelSpotShadow(cart_statue, glm::vec3(-20.0f, floorY, 0.0f), spos, far_plane_spot, cullingEnabled, frustum, 4.0f, coffeeScale, spotDepthShader);
                 }
                 // Drill (+Z)
-                if (!drill_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 20.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                    for (auto &r : drill_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!drill_statue.empty())
+                {
+                    renderModelSpotShadow(drill_statue, glm::vec3(0.0f, floorY, 20.0f), spos, far_plane_spot, cullingEnabled, frustum, 8.0f, defaultStatueScale, spotDepthShader);
                 }
                 // Horse (-Z)
-                if (!horse_statue.empty()) {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, -20.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                    for (auto &r : horse_statue) {
-                        glm::mat4 m = modelMat * r.transform;
-                        glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                        r.mesh->render();
-                    }
+                if (!horse_statue.empty())
+                {
+                    renderModelSpotShadow(horse_statue, glm::vec3(0.0f, floorY, -20.0f), spos, far_plane_spot, cullingEnabled, frustum, 8.0f, defaultStatueScale, spotDepthShader);
                 }
 
-                // Render new potted plants in outer rooms (Spot Shadow Pass)
-                if (!potted_plant_02.empty()) {
+                // Render new potted plants in outer rooms (Spot Shadow Pass) with FRUSTUM CULLING
+                if (!potted_plant_02.empty())
+                {
                     const float potScale = 4.0f;
                     std::vector<glm::vec3> outerRoomCenters = {
                         glm::vec3(20.0f, 0.0f, 0.0f),  // East
@@ -840,22 +985,16 @@ int main()
                         glm::vec3(8.0f, 0.0f, 8.0f),
                         glm::vec3(-8.0f, 0.0f, 8.0f),
                         glm::vec3(8.0f, 0.0f, -8.0f),
-                        glm::vec3(-8.0f, 0.0f, -8.0f)
-                    };
+                        glm::vec3(-8.0f, 0.0f, -8.0f)};
 
-                    for (const auto& center : outerRoomCenters) {
-                        for (const auto& offset : cornerOffsets) {
+                    for (const auto &center : outerRoomCenters)
+                    {
+                        for (const auto &offset : cornerOffsets)
+                        {
+
                             glm::vec3 pos = center + offset;
                             pos.y = floorY; // Ensure correct floor height
-                            
-                            glm::mat4 modelMat{1.0f};
-                            modelMat = glm::translate(modelMat, pos);
-                            modelMat = glm::scale(modelMat, glm::vec3(potScale));
-                            for (auto &r : potted_plant_02) {
-                                glm::mat4 m = modelMat * r.transform;
-                                glUniformMatrix4fv(spotDepthShader->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                                r.mesh->render();
-                            }
+                            renderModelSpotShadow(potted_plant_02, pos, spos, far_plane_spot, cullingEnabled, frustum, 2.0f, potScale, spotDepthShader);
                         }
                     }
                 }
@@ -945,10 +1084,20 @@ int main()
         }
         // spot shadows are bound; no debug toggle to set here
 
-        // Render the room instances (museum composed of multiple rooms)
+        // Render the room instances (museum composed of multiple rooms) with FRUSTUM CULLING
         for (size_t i = 0; i < roomTransforms.size() && i < rooms.size(); ++i)
         {
-            rooms[i].render(Data::shader_list[0], roomTransforms[i]);
+            // totalObjects++;
+
+            // Frustum culling para habitaciones
+            glm::vec3 roomCenter = glm::vec3(roomTransforms[i] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+            float roomRadius = 15.0f; // Radio aproximado de una habitación
+
+            if (frustum.isSphereInFrustum(roomCenter, roomRadius))
+            {
+                rooms[i].render(Data::shader_list[0], roomTransforms[i]);
+                // objectsRendered++;
+            }
         }
 
         // --- Render imported model(s) (simple test) ---
@@ -982,36 +1131,9 @@ int main()
                 glm::radians(90.0f)   // left: rotate 90 around Y
             };
 
-            for (auto &r : imported_models)
-            {
-                for (size_t i = 0; i < positions.size(); ++i)
-                {
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, positions[i]);
-                    modelMat = glm::rotate(modelMat, rotations[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                    modelMat = glm::scale(modelMat, glm::vec3(modelScale));
-                    // apply the loader's local transform (which aligned mesh bottom to 0)
-                    modelMat = modelMat * r.transform;
+            placeModelInPosition(imported_models, positions, rotations, cullingEnabled, frustum, 5.0f, modelScale, fallback_albedo, fallback_normal);
 
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-
-                    // Bind the model's textures (or fallbacks created by the loader)
-                    if (r.albedo)
-                        r.albedo->use();
-                    else
-                        fallback_albedo->use();
-
-                    glActiveTexture(GL_TEXTURE1);
-                    if (r.normal)
-                        glBindTexture(GL_TEXTURE_2D, r.normal->get_id());
-                    else
-                        glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-
-                    r.mesh->render();
-                }
-            }
-
-            // Render props (one group per table) on top of the tables in the main pass
+            // Render props (one group per table) on top of the tables in the main pass with FRUSTUM CULLING
             // Compute table height from imported_models (max of src heights)
             float tableHeight = 0.0f;
             for (auto &r : imported_models)
@@ -1030,37 +1152,43 @@ int main()
                 basePos.y = floorY + tableHeight + 0.02f; // small epsilon above table
                 for (auto &pr : group)
                 {
+                    // totalObjects++;
 
-                    glm::vec3 srcSize = pr.src_max - pr.src_min;
-                    glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
-                    float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
-                    float target = (i < perPropFootprintMain.size()) ? perPropFootprintMain[i] : targetFootprint;
-                    float scaleUniform = target / footprintDim;
-                    scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
+                    // Frustum culling para props
+                    if (!cullingEnabled || frustum.isSphereInFrustum(basePos, 1.0f))
+                    {
+                        glm::vec3 srcSize = pr.src_max - pr.src_min;
+                        glm::vec3 srcCenter = (pr.src_min + pr.src_max) * 0.5f;
+                        float footprintDim = std::max(0.001f, std::max(srcSize.x, srcSize.z));
+                        float target = (i < perPropFootprintMain.size()) ? perPropFootprintMain[i] : targetFootprint;
+                        float scaleUniform = target / footprintDim;
+                        scaleUniform = std::clamp(scaleUniform, 0.02f, 10.0f);
 
-                    glm::mat4 modelMat{1.0f};
-                    modelMat = glm::translate(modelMat, basePos);
-                    modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
-                    glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
-                    modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
+                        glm::mat4 modelMat{1.0f};
+                        modelMat = glm::translate(modelMat, basePos);
+                        modelMat = glm::scale(modelMat, glm::vec3(scaleUniform));
+                        glm::vec3 centerXZ = glm::vec3(srcCenter.x, 0.0f, srcCenter.z);
+                        modelMat = modelMat * pr.transform * glm::translate(glm::mat4(1.0f), -centerXZ);
 
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
+                        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
 
-                    if (pr.albedo)
-                        pr.albedo->use();
-                    else
-                        fallback_albedo->use();
-                    glActiveTexture(GL_TEXTURE1);
-                    if (pr.normal)
-                        glBindTexture(GL_TEXTURE_2D, pr.normal->get_id());
-                    else
-                        glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
+                        if (pr.albedo)
+                            pr.albedo->use();
+                        else
+                            fallback_albedo->use();
+                        glActiveTexture(GL_TEXTURE1);
+                        if (pr.normal)
+                            glBindTexture(GL_TEXTURE_2D, pr.normal->get_id());
+                        else
+                            glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
 
-                    pr.mesh->render();
+                        pr.mesh->render();
+                        // objectsRendered++;
+                    }
                 }
             }
 
-            // Render potted plants in the main spot positions (one in each corner)
+            // Render potted plants in the main spot positions (one in each corner) with FRUSTUM CULLING
             if (!potted_models.empty())
             {
                 std::vector<glm::vec3> potPositions = {
@@ -1071,35 +1199,10 @@ int main()
                 std::vector<float> potRot = {0.0f, glm::pi<float>(), glm::radians(90.0f), glm::radians(-90.0f)};
                 const float potScale = 4.0f;
 
-                for (auto &pr : potted_models)
-                {
-                    for (size_t i = 0; i < potPositions.size(); ++i)
-                    {
-                        glm::mat4 modelMat{1.0f};
-                        modelMat = glm::translate(modelMat, potPositions[i]);
-                        modelMat = glm::rotate(modelMat, potRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                        modelMat = glm::scale(modelMat, glm::vec3(potScale));
-                        modelMat = modelMat * pr.transform;
-
-                        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-
-                        if (pr.albedo)
-                            pr.albedo->use();
-                        else
-                            fallback_albedo->use();
-
-                        glActiveTexture(GL_TEXTURE1);
-                        if (pr.normal)
-                            glBindTexture(GL_TEXTURE_2D, pr.normal->get_id());
-                        else
-                            glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-
-                        pr.mesh->render();
-                    }
-                }
+                placeModelInPosition(potted_models, potPositions, potRot, cullingEnabled, frustum, 2.0f, potScale, fallback_albedo, fallback_normal);
             }
 
-            // Render picture frames in the main pass (one centered on each wall)
+            // Render picture frames in the main pass (one centered on each wall) with FRUSTUM CULLING
             if (!picture_models.empty())
             {
                 const float pictureYOffset = 3.5f;
@@ -1113,33 +1216,9 @@ int main()
                 std::vector<float> picRot = {glm::pi<float>(), 0.0f, glm::radians(270.0f), glm::radians(90.0f)};
                 const float picScale = 4.0f;
 
-                for (auto &pr : picture_models)
-                {
-                    for (size_t i = 0; i < picPositions.size(); ++i)
-                    {
-                        glm::mat4 modelMat{1.0f};
-                        modelMat = glm::translate(modelMat, picPositions[i]);
-                        modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                        modelMat = glm::scale(modelMat, glm::vec3(picScale));
-                        modelMat = modelMat * pr.transform;
+                placeModelInPosition(picture_models, picPositions, picRot, cullingEnabled, frustum, 2.0f, picScale, fallback_albedo, fallback_normal);
 
-                        glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-
-                        if (pr.albedo)
-                            pr.albedo->use();
-                        else
-                            fallback_albedo->use();
-
-                        glActiveTexture(GL_TEXTURE1);
-                        if (pr.normal)
-                            glBindTexture(GL_TEXTURE_2D, pr.normal->get_id());
-                        else
-                            glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-
-                        pr.mesh->render();
-                    }
-                }
-                // Render the second picture-frame variant mirrored on the opposite side in the main pass
+                // Render the second picture-frame variant mirrored on the opposite side in the main pass with FRUSTUM CULLING
                 if (!picture2_models.empty())
                 {
                     std::vector<glm::vec3> pic2Positions = {
@@ -1147,113 +1226,45 @@ int main()
                         glm::vec3(-pictureShift, floorY + pictureYOffset, -wallDist),
                         glm::vec3(wallDist, floorY + pictureYOffset, -pictureShift),
                         glm::vec3(-wallDist, floorY + pictureYOffset, -pictureShift)};
-                    for (auto &pr2 : picture2_models)
-                    {
-                        for (size_t i = 0; i < pic2Positions.size(); ++i)
-                        {
-                            glm::mat4 modelMat{1.0f};
-                            modelMat = glm::translate(modelMat, pic2Positions[i]);
-                            modelMat = glm::rotate(modelMat, picRot[i], glm::vec3(0.0f, 1.0f, 0.0f));
-                            modelMat = glm::scale(modelMat, glm::vec3(picScale));
-                            modelMat = modelMat * pr2.transform;
 
-                            glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(modelMat));
-
-                            if (pr2.albedo)
-                                pr2.albedo->use();
-                            else
-                                fallback_albedo->use();
-
-                            glActiveTexture(GL_TEXTURE1);
-                            if (pr2.normal)
-                                glBindTexture(GL_TEXTURE_2D, pr2.normal->get_id());
-                            else
-                                glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-
-                            pr2.mesh->render();
-                        }
-                    }
+                    placeModelInPosition(picture2_models, pic2Positions, picRot, cullingEnabled, frustum, 2.0f, picScale, fallback_albedo, fallback_normal);
                 }
             }
 
-            // Render new "big statues" in the main pass
+            // Render new "big statues" in the main pass with FRUSTUM CULLING
             const float defaultStatueScale = 12.0f;
             const float cannonScale = 3.0f;
             const float coffeeScale = 2.0f;
-            
+
             // Cat (Center)
-            if (!cat_statue.empty()) {
-                glm::mat4 modelMat{1.0f};
-                modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 0.0f));
-                modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                for (auto &r : cat_statue) {
-                    glm::mat4 m = modelMat * r.transform;
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
-                    glActiveTexture(GL_TEXTURE1);
-                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-                    r.mesh->render();
-                }
+            if (!cat_statue.empty())
+            {
+                placeModelInPosition(cat_statue, glm::vec3(0.0f, floorY, 0.0f), cullingEnabled, frustum, 8.0f, defaultStatueScale, fallback_albedo, fallback_normal);
             }
             // Cannon (+X)
-            if (!cannon_statue.empty()) {
-                glm::mat4 modelMat{1.0f};
-                modelMat = glm::translate(modelMat, glm::vec3(20.0f, floorY, 0.0f));
-                modelMat = glm::scale(modelMat, glm::vec3(cannonScale));
-                for (auto &r : cannon_statue) {
-                    glm::mat4 m = modelMat * r.transform;
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
-                    glActiveTexture(GL_TEXTURE1);
-                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-                    r.mesh->render();
-                }
+            if (!cannon_statue.empty())
+            {
+                placeModelInPosition(cannon_statue, glm::vec3(20.0f, floorY, 0.0f), cullingEnabled, frustum, 5.0f, cannonScale, fallback_albedo, fallback_normal);
             }
             // Cart (-X)
-            if (!cart_statue.empty()) {
-                glm::mat4 modelMat{1.0f};
-                modelMat = glm::translate(modelMat, glm::vec3(-20.0f, floorY, 0.0f));
-                modelMat = glm::scale(modelMat, glm::vec3(coffeeScale));
-                for (auto &r : cart_statue) {
-                    glm::mat4 m = modelMat * r.transform;
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
-                    glActiveTexture(GL_TEXTURE1);
-                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-                    r.mesh->render();
-                }
+            if (!cart_statue.empty())
+            {
+                placeModelInPosition(cart_statue, glm::vec3(-20.0f, floorY, 0.0f), cullingEnabled, frustum, 4.0f, coffeeScale, fallback_albedo, fallback_normal);
             }
             // Drill (+Z)
-            if (!drill_statue.empty()) {
-                glm::mat4 modelMat{1.0f};
-                modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, 20.0f));
-                modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                for (auto &r : drill_statue) {
-                    glm::mat4 m = modelMat * r.transform;
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
-                    glActiveTexture(GL_TEXTURE1);
-                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-                    r.mesh->render();
-                }
+            if (!drill_statue.empty())
+            {
+                placeModelInPosition(drill_statue, glm::vec3(0.0f, floorY, 20.0f), cullingEnabled, frustum, 8.0f, defaultStatueScale, fallback_albedo, fallback_normal);
             }
             // Horse (-Z)
-            if (!horse_statue.empty()) {
-                glm::mat4 modelMat{1.0f};
-                modelMat = glm::translate(modelMat, glm::vec3(0.0f, floorY, -20.0f));
-                modelMat = glm::scale(modelMat, glm::vec3(defaultStatueScale));
-                for (auto &r : horse_statue) {
-                    glm::mat4 m = modelMat * r.transform;
-                    glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                    if (r.albedo) r.albedo->use(); else fallback_albedo->use();
-                    glActiveTexture(GL_TEXTURE1);
-                    if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-                    r.mesh->render();
-                }
+            if (!horse_statue.empty())
+            {
+                placeModelInPosition(horse_statue, glm::vec3(0.0f, floorY, -20.0f), cullingEnabled, frustum, 8.0f, defaultStatueScale, fallback_albedo, fallback_normal);
             }
 
-            // Render new potted plants in outer rooms (Main Pass)
-            if (!potted_plant_02.empty()) {
+            // Render new potted plants in outer rooms (Main Pass) with FRUSTUM CULLING
+            if (!potted_plant_02.empty())
+            {
                 const float potScale = 4.0f;
                 std::vector<glm::vec3> outerRoomCenters = {
                     glm::vec3(20.0f, 0.0f, 0.0f),  // East
@@ -1266,25 +1277,18 @@ int main()
                     glm::vec3(8.0f, 0.0f, 8.0f),
                     glm::vec3(-8.0f, 0.0f, 8.0f),
                     glm::vec3(8.0f, 0.0f, -8.0f),
-                    glm::vec3(-8.0f, 0.0f, -8.0f)
-                };
+                    glm::vec3(-8.0f, 0.0f, -8.0f)};
 
-                for (const auto& center : outerRoomCenters) {
-                    for (const auto& offset : cornerOffsets) {
+                for (const auto &center : outerRoomCenters)
+                {
+                    for (const auto &offset : cornerOffsets)
+                    {
+                        // totalObjects++;
+
                         glm::vec3 pos = center + offset;
                         pos.y = floorY; // Ensure correct floor height
-                        
-                        glm::mat4 modelMat{1.0f};
-                        modelMat = glm::translate(modelMat, pos);
-                        modelMat = glm::scale(modelMat, glm::vec3(potScale));
-                        for (auto &r : potted_plant_02) {
-                            glm::mat4 m = modelMat * r.transform;
-                            glUniformMatrix4fv(Data::shader_list[0]->get_uniform_model_id(), 1, GL_FALSE, glm::value_ptr(m));
-                            if (r.albedo) r.albedo->use(); else fallback_albedo->use();
-                            glActiveTexture(GL_TEXTURE1);
-                            if (r.normal) glBindTexture(GL_TEXTURE_2D, r.normal->get_id()); else glBindTexture(GL_TEXTURE_2D, fallback_normal->get_id());
-                            r.mesh->render();
-                        }
+
+                        placeModelInPosition(potted_plant_02, pos, cullingEnabled, frustum, 2.0f, potScale, fallback_albedo, fallback_normal);
                     }
                 }
             }
@@ -1297,13 +1301,12 @@ int main()
 
         for (const auto &bulb : lightbulbs)
         {
+            // Las lightbulbs siempre se renderizan (son pequeñas y importantes visualmente)
             bulb.render(Data::shader_list[1]);
         }
 
         glUseProgram(0);
 
-
-        
         // Render debug quad on top if active
         // if (debugMode > 0)
         // {
