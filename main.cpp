@@ -191,9 +191,9 @@ void initialize_exterior_floor()
     std::vector<GLfloat> floor_vertices = {
         // x      y     z       nx   ny   nz    u     v
         -50.f, -2.1f, -50.f, 0.f, 1.f, 0.f, 0.f, 0.f,
-        50.f, -2.1f, -50.f, 0.f, 1.f, 0.f, 3.f, 0.f,
-        50.f, -2.1f, 50.f, 0.f, 1.f, 0.f, 3.f, 3.f,
-        -50.f, -2.1f, 50.f, 0.f, 1.f, 0.f, 0.f, 3.f
+        50.f, -2.1f, -50.f, 0.f, 1.f, 0.f, 5.f, 0.f,
+        50.f, -2.1f, 50.f, 0.f, 1.f, 0.f, 5.f, 5.f,
+        -50.f, -2.1f, 50.f, 0.f, 1.f, 0.f, 0.f, 5.f
     };
 
     std::vector<unsigned int> floor_indices = {
