@@ -33,6 +33,7 @@ struct Data
     static const fs::path lightbulb_fragment_shader_path;
     static std::shared_ptr<Mesh> exterior_floor_mesh;
     static std::shared_ptr<Texture> exterior_floor_texture;
+    static std::shared_ptr<Texture> exterior_floor_normal_texture;
     static bool exterior_floor_initialized;
 };
 
@@ -40,6 +41,7 @@ std::vector<std::shared_ptr<Shader>> Data::shader_list{};
 std::shared_ptr<SkyBox> Data::sky_box{nullptr};
 std::shared_ptr<Mesh> Data::exterior_floor_mesh{nullptr};
 std::shared_ptr<Texture> Data::exterior_floor_texture{nullptr};
+std::shared_ptr<Texture> Data::exterior_floor_normal_texture{nullptr};
 bool Data::exterior_floor_initialized = false;
 
 const fs::path Data::root_path{fs::path{__FILE__}.parent_path()};
@@ -187,11 +189,11 @@ void initialize_exterior_floor()
 
     // Crear vértices para un piso grande (200x200 unidades)
     std::vector<GLfloat> floor_vertices = {
-        // x      y     z       u     v     nx   ny   nz
-        -50.f, -3.f, -50.f, 0.f, 0.f, 0.f, 1.f, 0.f,
-        50.f, -3.f, -50.f, 20.f, 0.f, 0.f, 1.f, 0.f,
-        50.f, -3.f, 50.f, 20.f, 20.f, 0.f, 1.f, 0.f,
-        -50.f, -3.f, 50.f, 0.f, 20.f, 0.f, 1.f, 0.f
+        // x      y     z       nx   ny   nz    u     v
+        -50.f, -2.1f, -50.f, 0.f, 1.f, 0.f, 0.f, 0.f,
+        50.f, -2.1f, -50.f, 0.f, 1.f, 0.f, 3.f, 0.f,
+        50.f, -2.1f, 50.f, 0.f, 1.f, 0.f, 3.f, 3.f,
+        -50.f, -2.1f, 50.f, 0.f, 1.f, 0.f, 0.f, 3.f
     };
 
     std::vector<unsigned int> floor_indices = {
@@ -201,11 +203,20 @@ void initialize_exterior_floor()
 
     Data::exterior_floor_mesh = Mesh::create(floor_vertices, floor_indices);
 
-    Data::exterior_floor_texture = std::make_shared<Texture>(Data::root_path / "textures" / "grass.jpg");
+    Data::exterior_floor_texture = std::make_shared<Texture>(Data::root_path / "textures" / "grass_albedo.jpg");
+    Data::exterior_floor_texture->load();
     if (!Data::exterior_floor_texture->get_id())
     {
         Data::exterior_floor_texture = std::make_shared<Texture>(150, 150, 150, 255);
         Data::exterior_floor_texture->load();
+    }
+
+    Data::exterior_floor_normal_texture = std::make_shared<Texture>(Data::root_path / "textures" / "grass_normal.png");
+    Data::exterior_floor_normal_texture->load();
+    if (!Data::exterior_floor_normal_texture->get_id())
+    {
+        Data::exterior_floor_normal_texture = std::make_shared<Texture>(128, 128, 255, 255);
+        Data::exterior_floor_normal_texture->load();
     }
 
     Data::exterior_floor_initialized = true;
@@ -234,15 +245,21 @@ void render_exterior_floor(const glm::mat4 &view, const glm::mat4 &projection, c
     glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "enableShadows"), 0);
 
     // LUZ DIRECCIONAL FUERTE (como sol exterior)
-    glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.direction"), -0.2f, -1.0f, -0.1f);
+    glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.direction"), -1.0f, -0.5f, -0.5f);
     glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.diffuse"), 1.5f, 1.5f, 1.3f);
-    glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.specular"), 0.8f, 0.8f, 0.8f);
+    glUniform3f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "dirLight.specular"), 0.2f, 0.2f, 0.2f);
 
-    // Usar textura del piso
+    // Usar textura del piso (Unit 0)
     Data::exterior_floor_texture->use();
+    glUniform1i(Data::shader_list[0]->get_uniform_texture_sampler_id(), 0);
+
+    // Usar normal map (Unit 1)
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, Data::exterior_floor_normal_texture->get_id());
+    glUniform1i(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "normal_sampler"), 1);
 
     // Configurar material para césped
-    glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "material.shininess"), 4.0f);
+    glUniform1f(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "material.shininess"), 16.0f);
 
     // Posición de cámara
     glUniform3fv(glGetUniformLocation(Data::shader_list[0]->get_program_id(), "viewPosition"),
